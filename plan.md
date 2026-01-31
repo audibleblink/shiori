@@ -415,24 +415,24 @@ echo "✓ Chat API endpoints work"
 
 ### Tasks
 
-- [ ] Create background worker in `internal/domains/embedding_worker.go`
+- [x] Create background worker in `internal/domains/embedding_worker.go`
   - Job queue for async embedding
   - Configurable concurrency
   - Exponential backoff on failures
   - Graceful shutdown
-- [ ] Hook embedding into bookmark save flow
+- [x] Hook embedding into bookmark save flow
   - Update `internal/domains/bookmarks.go`:
     - After bookmark save, enqueue embedding job
     - Set `embedding_status = 'pending'`
     - Job runs asynchronously (don't block response)
-- [ ] Implement backfill job (already in embedding.go BackfillEmbeddings)
+- [x] Implement backfill job (already in embedding.go BackfillEmbeddings)
   - Query bookmarks with `embedding_status = 'pending'`
   - Process in batches (configurable size)
   - Delay between batches to avoid overwhelming Ollama
   - Idempotent (safe to restart)
   - Log progress: "Backfill: 45/150 complete"
-- [ ] Start backfill on server startup (if enabled in config)
-- [ ] Add embedding re-generation on bookmark content update
+- [x] Start backfill on server startup (if enabled in config)
+- [x] Add embedding re-generation on bookmark content update
   - Detect content changes
   - Delete old chunks
   - Re-enqueue for embedding

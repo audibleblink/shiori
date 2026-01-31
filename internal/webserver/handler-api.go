@@ -240,6 +240,8 @@ func (h *Handler) ApiInsertBookmark(w http.ResponseWriter, r *http.Request, ps h
 			if _, err := h.DB.SaveBookmarks(context.Background(), false, *bookmark); err != nil {
 				log.Printf("failed to save bookmark: %s", err)
 			}
+			// Enqueue for embedding after content is downloaded
+			h.dependencies.Domains().Bookmarks().EnqueueBookmarkForEmbedding(bookmark.ID)
 		}()
 	} else {
 		// Workaround. Download content after saving the bookmark so we have the proper database
@@ -250,6 +252,8 @@ func (h *Handler) ApiInsertBookmark(w http.ResponseWriter, r *http.Request, ps h
 		} else if _, err := h.DB.SaveBookmarks(ctx, false, *book); err != nil {
 			log.Printf("failed to save bookmark: %s", err)
 		}
+		// Enqueue for embedding after content is downloaded
+		h.dependencies.Domains().Bookmarks().EnqueueBookmarkForEmbedding(book.ID)
 	}
 
 	// Return the new bookmark

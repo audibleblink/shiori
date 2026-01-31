@@ -21,6 +21,11 @@ type BookmarksDomain interface {
 	AddTagToBookmark(ctx context.Context, bookmarkID int, tagID int) error
 	RemoveTagFromBookmark(ctx context.Context, bookmarkID int, tagID int) error
 	BookmarkExists(ctx context.Context, id int) (bool, error)
+	// EnqueueBookmarkForEmbedding queues a bookmark for AI embedding generation
+	// This is a no-op if AI features are not enabled
+	EnqueueBookmarkForEmbedding(bookmarkID int)
+	// EnqueueBookmarksForEmbedding queues multiple bookmarks for AI embedding generation
+	EnqueueBookmarksForEmbedding(bookmarkIDs []int)
 }
 
 type AuthDomain interface {

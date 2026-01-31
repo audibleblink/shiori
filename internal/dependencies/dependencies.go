@@ -6,11 +6,22 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// EmbeddingWorkerInterface defines the interface for embedding workers
+// This allows the worker to be injected from the cmd package
+type EmbeddingWorkerInterface interface {
+	Start()
+	Stop()
+	EnqueueBookmark(bookmarkID int) bool
+	IsRunning() bool
+	QueueLength() int
+}
+
 type Dependencies struct {
-	log      *logrus.Logger
-	domains  *domains
-	config   *config.Config
-	database model.DB
+	log             *logrus.Logger
+	domains         *domains
+	config          *config.Config
+	database        model.DB
+	embeddingWorker EmbeddingWorkerInterface
 }
 
 func (d *Dependencies) Logger() *logrus.Logger {
@@ -27,6 +38,14 @@ func (d *Dependencies) Config() *config.Config {
 
 func (d *Dependencies) Database() model.DB {
 	return d.database
+}
+
+func (d *Dependencies) EmbeddingWorker() EmbeddingWorkerInterface {
+	return d.embeddingWorker
+}
+
+func (d *Dependencies) SetEmbeddingWorker(worker EmbeddingWorkerInterface) {
+	d.embeddingWorker = worker
 }
 
 type domains struct {

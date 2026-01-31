@@ -140,6 +140,9 @@ func HandleUpdateCache(deps model.Dependencies, c model.WebContext) {
 			mx.Lock()
 			bookmarks[i] = *updatedBook
 			mx.Unlock()
+
+			// Enqueue for re-embedding after content is updated
+			deps.Domains().Bookmarks().EnqueueBookmarkForEmbedding(updatedBook.ID)
 		}(i, book)
 	}
 

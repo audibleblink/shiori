@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/go-shiori/shiori/internal/config"
+	"github.com/go-shiori/shiori/internal/domains"
 	"github.com/go-shiori/shiori/internal/http"
 	"github.com/go-shiori/shiori/internal/model"
 	"github.com/spf13/cobra"
@@ -99,6 +100,35 @@ func newServerCommandHandler() func(cmd *cobra.Command, args []string) {
 		}
 		dependencies.Logger().Debug("started http server")
 
+		// Start embedding worker and backfill if AI is configured
+		if worker := dependencies.EmbeddingWorker(); worker != nil {
+			dependencies.Logger().Info("Starting embedding worker")
+			worker.Start()
+
+			// Set the enqueue function so bookmarks domain can queue embeddings
+			domains.SetEmbeddingEnqueueFunc(worker.EnqueueBookmark)
+
+			// Run backfill in background
+			if cfg.AI != nil && cfg.AI.Embedding != nil {
+				go func() {
+					dependencies.Logger().Info("Starting embedding backfill in background")
+					batchSize := cfg.AI.Embedding.BackfillBatch
+					delayMs := cfg.AI.Embedding.BackfillDelayMs
+					if embeddingDomain := dependencies.Domains().Embedding(); embeddingDomain != nil {
+						if err := embeddingDomain.BackfillEmbeddings(ctx, batchSize, delayMs); err != nil {
+							dependencies.Logger().WithError(err).Warn("Embedding backfill encountered an error")
+						}
+					}
+				}()
+			}
+		}
+
 		server.WaitStop(ctx)
+
+		// Stop embedding worker on shutdown
+		if worker := dependencies.EmbeddingWorker(); worker != nil {
+			dependencies.Logger().Info("Stopping embedding worker")
+			worker.Stop()
+		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-shiori/shiori/internal/config"
+	"github.com/go-shiori/shiori/internal/core"
 	"github.com/go-shiori/shiori/internal/database"
 	"github.com/go-shiori/shiori/internal/dependencies"
 	"github.com/go-shiori/shiori/internal/domains"
@@ -110,6 +111,51 @@ func initShiori(ctx context.Context, cmd *cobra.Command) (*config.Config, *depen
 	dependencies.Domains().SetBookmarks(domains.NewBookmarksDomain(dependencies))
 	dependencies.Domains().SetStorage(domains.NewStorageDomain(dependencies, afero.NewBasePathFs(afero.NewOsFs(), cfg.Storage.DataDir)))
 	dependencies.Domains().SetTags(domains.NewTagsDomain(dependencies))
+
+	// Initialize AI features if enabled and database supports it
+	if cfg.AI != nil && cfg.AI.IsConfigured() && db.SupportsAI() {
+		logger.Info("AI features enabled, initializing embedding service")
+
+		// Create Ollama client
+		ollamaClient := core.NewOllamaClient(cfg.AI.Ollama.Host, cfg.AI.Ollama.Model)
+
+		// Create text chunker
+		chunker := core.NewTextChunker(cfg.AI.Embedding.ChunkSize, cfg.AI.Embedding.ChunkOverlap)
+
+		// Create embedding domain
+		embeddingDomain := domains.NewEmbeddingDomain(dependencies, ollamaClient, chunker)
+		dependencies.Domains().SetEmbedding(embeddingDomain)
+
+		// Create and configure embedding worker
+		workerConfig := domains.DefaultEmbeddingWorkerConfig()
+		embeddingWorker := domains.NewEmbeddingWorker(dependencies, embeddingDomain, workerConfig)
+		dependencies.SetEmbeddingWorker(embeddingWorker)
+
+		// Create Anthropic client and chat domain
+		anthropicClient := core.NewAnthropicClient(
+			cfg.AI.Anthropic.APIKey,
+			cfg.AI.Anthropic.Model,
+			core.WithMaxTokens(cfg.AI.Anthropic.MaxTokens),
+		)
+		chatDomain := domains.NewChatDomain(
+			dependencies,
+			anthropicClient,
+			embeddingDomain,
+			domains.ChatDomainConfig{
+				SimilarityThreshold: cfg.AI.Retrieval.SimilarityThreshold,
+				MaxChunks:           cfg.AI.Retrieval.MaxChunks,
+			},
+		)
+		dependencies.Domains().SetChat(chatDomain)
+
+		logger.Info("AI features initialized successfully")
+	} else if cfg.AI != nil && cfg.AI.Enabled {
+		if !db.SupportsAI() {
+			logger.Warn("AI features enabled but database does not support AI (pgvector required)")
+		} else {
+			logger.Warn("AI features enabled but not fully configured (check SHIORI_ANTHROPIC_API_KEY and SHIORI_OLLAMA_HOST)")
+		}
+	}
 
 	// Workaround: Get accounts to make sure at least one is present in the database.
 	// If there's no accounts in the database, create the shiori/gopher account the legacy api

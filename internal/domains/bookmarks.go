@@ -166,6 +166,36 @@ func (d *BookmarksDomain) BookmarkExists(ctx context.Context, id int) (bool, err
 	return d.deps.Database().BookmarkExists(ctx, id)
 }
 
+// EnqueueForEmbeddingFunc is a function type for enqueuing bookmarks for embedding
+type EnqueueForEmbeddingFunc func(bookmarkID int) bool
+
+// embeddingEnqueueFunc holds a function to enqueue bookmarks for embedding
+// This is set by the cmd package when the embedding worker is initialized
+var embeddingEnqueueFunc EnqueueForEmbeddingFunc
+
+// SetEmbeddingEnqueueFunc sets the function to use for enqueuing bookmarks
+func SetEmbeddingEnqueueFunc(fn EnqueueForEmbeddingFunc) {
+	embeddingEnqueueFunc = fn
+}
+
+// EnqueueBookmarkForEmbedding queues a bookmark for embedding generation
+// This should be called after a bookmark is created or its content is updated
+// It's a no-op if AI features are not enabled
+func (d *BookmarksDomain) EnqueueBookmarkForEmbedding(bookmarkID int) {
+	if embeddingEnqueueFunc != nil {
+		if enqueued := embeddingEnqueueFunc(bookmarkID); enqueued {
+			d.deps.Logger().WithField("bookmark_id", bookmarkID).Debug("Bookmark enqueued for embedding")
+		}
+	}
+}
+
+// EnqueueBookmarksForEmbedding queues multiple bookmarks for embedding generation
+func (d *BookmarksDomain) EnqueueBookmarksForEmbedding(bookmarkIDs []int) {
+	for _, id := range bookmarkIDs {
+		d.EnqueueBookmarkForEmbedding(id)
+	}
+}
+
 func NewBookmarksDomain(deps model.Dependencies) *BookmarksDomain {
 	return &BookmarksDomain{
 		deps: deps,
