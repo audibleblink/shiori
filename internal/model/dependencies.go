@@ -29,4 +29,6 @@ type DomainDependencies interface {
 	SetTags(tags TagsDomain)
 	Embedding() EmbeddingDomain
 	SetEmbedding(embedding EmbeddingDomain)
+	Chat() ChatDomain
+	SetChat(chat ChatDomain)
 }

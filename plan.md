@@ -236,11 +236,11 @@ echo "✓ Embedding pipeline works end-to-end"
 
 ### Tasks
 
-- [ ] Create Anthropic client in `internal/core/anthropic_client.go`
+- [x] Create Anthropic client in `internal/core/anthropic_client.go`
   - `StreamChat(ctx, messages, systemPrompt) (<-chan StreamEvent, error)`
   - Server-Sent Events support
   - Handle streaming chunks, errors, completion
-- [ ] Implement `ChatDomain` in `internal/domains/chat.go`
+- [x] Implement `ChatDomain` in `internal/domains/chat.go`
   - `Chat(ctx, userID, message, history)` - orchestrates RAG pipeline:
     1. Embed user's query via EmbeddingService
     2. Search similar chunks (threshold=0.7, limit=20)
@@ -248,11 +248,11 @@ echo "✓ Embedding pipeline works end-to-end"
     4. Stream chat response via Anthropic
     5. Extract source citations from chunks
   - `GetEmbeddingStatus(ctx, userID)` - aggregate stats by user
-- [ ] Create RAG prompt builder in `internal/core/prompt_builder.go`
+- [x] Create RAG prompt builder in `internal/core/prompt_builder.go`
   - `BuildSystemPrompt(chunks []ChunkResult) string`
   - Format chunks with bookmark metadata
   - Implement template from PRD Appendix A
-- [ ] Add chat domain to Dependencies struct
+- [x] Add chat domain to Dependencies struct
 
 ### Completion Criteria
 

@@ -37,6 +37,7 @@ type domains struct {
 	storage   model.StorageDomain
 	tags      model.TagsDomain
 	embedding model.EmbeddingDomain
+	chat      model.ChatDomain
 }
 
 func (d *domains) Auth() model.AuthDomain                       { return d.auth }
@@ -53,6 +54,8 @@ func (d *domains) Tags() model.TagsDomain                       { return d.tags 
 func (d *domains) SetTags(tags model.TagsDomain)                { d.tags = tags }
 func (d *domains) Embedding() model.EmbeddingDomain             { return d.embedding }
 func (d *domains) SetEmbedding(embedding model.EmbeddingDomain) { d.embedding = embedding }
+func (d *domains) Chat() model.ChatDomain                       { return d.chat }
+func (d *domains) SetChat(chat model.ChatDomain)                { d.chat = chat }
 
 var _ model.DomainDependencies = (*domains)(nil)
 

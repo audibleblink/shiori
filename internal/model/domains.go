@@ -75,3 +75,15 @@ type EmbeddingDomain interface {
 	// IsOllamaAvailable checks if Ollama is reachable
 	IsOllamaAvailable(ctx context.Context) error
 }
+
+// ChatDomain handles AI-powered chat over bookmark content
+type ChatDomain interface {
+	// Chat performs Q&A over user's bookmarks and returns a streaming response
+	Chat(ctx context.Context, message string, history []ChatMessage) (<-chan StreamChatEvent, error)
+	// ChatSync performs Q&A over user's bookmarks and returns a complete response
+	ChatSync(ctx context.Context, message string, history []ChatMessage) (*ChatResponse, error)
+	// GetEmbeddingStatus returns the embedding status summary
+	GetEmbeddingStatus(ctx context.Context) (*EmbeddingStatusSummary, error)
+	// IsAvailable checks if the chat service is available
+	IsAvailable(ctx context.Context) error
+}
