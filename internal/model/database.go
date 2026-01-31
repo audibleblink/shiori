@@ -101,6 +101,32 @@ type DB interface {
 
 	// BookmarkExists checks if a bookmark with the given ID exists in the database
 	BookmarkExists(ctx context.Context, bookmarkID int) (bool, error)
+
+	// AI/Embedding related methods - these may return ErrAINotSupported on non-PostgreSQL databases
+
+	// CreateBookmarkChunks creates multiple bookmark chunks with embeddings
+	CreateBookmarkChunks(ctx context.Context, chunks []BookmarkChunk) error
+
+	// GetBookmarkChunks returns all chunks for a bookmark
+	GetBookmarkChunks(ctx context.Context, bookmarkID int) ([]BookmarkChunk, error)
+
+	// DeleteBookmarkChunks removes all chunks for a bookmark
+	DeleteBookmarkChunks(ctx context.Context, bookmarkID int) error
+
+	// UpdateBookmarkEmbeddingStatus updates the embedding status for a bookmark
+	UpdateBookmarkEmbeddingStatus(ctx context.Context, bookmarkID int, status EmbeddingStatus, errorMsg *string) error
+
+	// GetBookmarksByEmbeddingStatus returns bookmarks with the given embedding status
+	GetBookmarksByEmbeddingStatus(ctx context.Context, status EmbeddingStatus, limit int) ([]BookmarkDTO, error)
+
+	// SearchSimilarChunks finds chunks similar to the given embedding vector
+	SearchSimilarChunks(ctx context.Context, embedding []float32, threshold float64, limit int) ([]ChunkResult, error)
+
+	// GetEmbeddingStatusSummary returns aggregate counts of embedding statuses
+	GetEmbeddingStatusSummary(ctx context.Context) (*EmbeddingStatusSummary, error)
+
+	// SupportsAI returns true if the database supports AI features (PostgreSQL with pgvector)
+	SupportsAI() bool
 }
 
 // DBOrderMethod is the order method for getting bookmarks

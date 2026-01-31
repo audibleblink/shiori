@@ -113,6 +113,7 @@ type Config struct {
 	Database    *DatabaseConfig
 	Storage     *StorageConfig
 	Http        *HttpConfig
+	AI          *AIConfig
 }
 
 // SetDefaults sets the default values for the configuration
@@ -159,11 +160,25 @@ func (c *Config) DebugConfiguration(logger *logrus.Logger) {
 	logger.Debugf(" SHIORI_SSO_PROXY_AUTH_ENABLED: %t", c.Http.SSOProxyAuth)
 	logger.Debugf(" SHIORI_SSO_PROXY_AUTH_HEADER_NAME: %s", c.Http.SSOProxyAuthHeaderName)
 	logger.Debugf(" SHIORI_SSO_PROXY_AUTH_TRUSTED: %v", c.Http.SSOProxyAuthTrusted)
+	if c.AI != nil {
+		logger.Debugf(" SHIORI_AI_ENABLED: %t", c.AI.Enabled)
+		if c.AI.Enabled {
+			logger.Debugf(" SHIORI_AI_ANTHROPIC_MODEL: %s", c.AI.Anthropic.Model)
+			logger.Debugf(" SHIORI_AI_OLLAMA_HOST: %s", c.AI.Ollama.Host)
+			logger.Debugf(" SHIORI_AI_OLLAMA_MODEL: %s", c.AI.Ollama.Model)
+		}
+	}
 }
 
 func (c *Config) IsValid() error {
 	if err := c.Http.IsValid(); err != nil {
 		return fmt.Errorf("http configuration is invalid: %w", err)
+	}
+
+	if c.AI != nil {
+		if err := c.AI.IsValid(); err != nil {
+			return fmt.Errorf("AI configuration is invalid: %w", err)
+		}
 	}
 
 	return nil

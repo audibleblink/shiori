@@ -33,3 +33,4 @@ type=docker
 # Docs
 docs/.venv
 build/docs
+.env

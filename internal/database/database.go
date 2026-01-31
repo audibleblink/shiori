@@ -20,6 +20,9 @@ var ErrNotFound = errors.New("not found")
 // ErrAlreadyExists is error returned when record already exists in database.
 var ErrAlreadyExists = errors.New("already exists")
 
+// ErrAINotSupported is returned when AI features are called on a database that doesn't support them
+var ErrAINotSupported = errors.New("AI features require PostgreSQL with pgvector extension")
+
 // Connect connects to database based on submitted database URL.
 func Connect(ctx context.Context, dbURL string) (model.DB, error) {
 	dbU, err := url.Parse(dbURL)

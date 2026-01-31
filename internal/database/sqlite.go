@@ -1298,3 +1298,43 @@ func (db *SQLiteDatabase) BulkUpdateBookmarkTags(ctx context.Context, bookmarkID
 		return nil
 	})
 }
+
+// SupportsAI returns false for SQLite which does not support pgvector
+func (db *SQLiteDatabase) SupportsAI() bool {
+	return false
+}
+
+// CreateBookmarkChunks is not supported on SQLite
+func (db *SQLiteDatabase) CreateBookmarkChunks(ctx context.Context, chunks []model.BookmarkChunk) error {
+	return ErrAINotSupported
+}
+
+// GetBookmarkChunks is not supported on SQLite
+func (db *SQLiteDatabase) GetBookmarkChunks(ctx context.Context, bookmarkID int) ([]model.BookmarkChunk, error) {
+	return nil, ErrAINotSupported
+}
+
+// DeleteBookmarkChunks is not supported on SQLite
+func (db *SQLiteDatabase) DeleteBookmarkChunks(ctx context.Context, bookmarkID int) error {
+	return ErrAINotSupported
+}
+
+// UpdateBookmarkEmbeddingStatus is not supported on SQLite
+func (db *SQLiteDatabase) UpdateBookmarkEmbeddingStatus(ctx context.Context, bookmarkID int, status model.EmbeddingStatus, errorMsg *string) error {
+	return ErrAINotSupported
+}
+
+// GetBookmarksByEmbeddingStatus is not supported on SQLite
+func (db *SQLiteDatabase) GetBookmarksByEmbeddingStatus(ctx context.Context, status model.EmbeddingStatus, limit int) ([]model.BookmarkDTO, error) {
+	return nil, ErrAINotSupported
+}
+
+// SearchSimilarChunks is not supported on SQLite
+func (db *SQLiteDatabase) SearchSimilarChunks(ctx context.Context, embedding []float32, threshold float64, limit int) ([]model.ChunkResult, error) {
+	return nil, ErrAINotSupported
+}
+
+// GetEmbeddingStatusSummary is not supported on SQLite
+func (db *SQLiteDatabase) GetEmbeddingStatusSummary(ctx context.Context) (*model.EmbeddingStatusSummary, error) {
+	return nil, ErrAINotSupported
+}

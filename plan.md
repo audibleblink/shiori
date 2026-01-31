@@ -65,24 +65,27 @@ echo "✓ All prerequisites met"
 
 ### Tasks
 
-- [ ] Add AI configuration struct to `internal/config/`
+- [x] Add AI configuration struct to `internal/config/`
   - `AIConfig` with nested `AnthropicConfig`, `OllamaConfig`, `RetrievalConfig`, `EmbeddingConfig`
   - Environment variable mapping
   - Validation logic
-- [ ] Create database migration `internal/database/migrations/0009_add_ai_features.sql`
+- [x] Create database migration `internal/database/migrations/postgres/0003_ai_features.up.sql`
   - `CREATE EXTENSION vector`
   - `bookmark_chunks` table with vector(768) column
   - IVFFlat index on embedding column
   - Add columns to `bookmark`: `embedding_status`, `embedding_error`, `embedded_at`
-- [ ] Update `internal/model/bookmark.go` with new fields
-- [ ] Add database methods to `internal/database/` interface:
-  - `CreateBookmarkChunk(chunk BookmarkChunk) error`
-  - `GetBookmarkChunks(bookmarkID int) ([]BookmarkChunk, error)`
-  - `DeleteBookmarkChunks(bookmarkID int) error`
-  - `UpdateBookmarkEmbeddingStatus(id int, status string, error *string) error`
-  - `SearchSimilarChunks(userID int, embedding []float32, threshold float64, limit int) ([]ChunkResult, error)`
-- [ ] Implement database methods for PostgreSQL only
-- [ ] Add graceful handling for SQLite/MySQL (return `ErrNotSupported`)
+- [x] Update `internal/model/ai.go` with new embedding-related types
+- [x] Add database methods to `internal/model/database.go` interface:
+  - `CreateBookmarkChunks(ctx, chunks []BookmarkChunk) error`
+  - `GetBookmarkChunks(ctx, bookmarkID int) ([]BookmarkChunk, error)`
+  - `DeleteBookmarkChunks(ctx, bookmarkID int) error`
+  - `UpdateBookmarkEmbeddingStatus(ctx, id int, status EmbeddingStatus, error *string) error`
+  - `SearchSimilarChunks(ctx, embedding []float32, threshold float64, limit int) ([]ChunkResult, error)`
+  - `GetBookmarksByEmbeddingStatus(ctx, status EmbeddingStatus, limit int) ([]BookmarkDTO, error)`
+  - `GetEmbeddingStatusSummary(ctx) (*EmbeddingStatusSummary, error)`
+  - `SupportsAI() bool`
+- [x] Implement database methods for PostgreSQL only
+- [x] Add graceful handling for SQLite/MySQL (return `ErrAINotSupported`)
 
 ### Completion Criteria
 

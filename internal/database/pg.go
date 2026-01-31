@@ -70,6 +70,7 @@ var postgresMigrations = []migration{
 		return nil
 	}),
 	newFileMigration("0.3.0", "0.4.0", "postgres/0002_created_time"),
+	newFileMigration("0.4.0", "0.5.0", "postgres/0003_ai_features"),
 }
 
 // PGDatabase is implementation of Database interface
@@ -1129,4 +1130,162 @@ func (db *PGDatabase) BulkUpdateBookmarkTags(ctx context.Context, bookmarkIDs []
 
 		return nil
 	})
+}
+
+// SupportsAI returns true for PostgreSQL which supports pgvector
+func (db *PGDatabase) SupportsAI() bool {
+	return true
+}
+
+// CreateBookmarkChunks creates multiple bookmark chunks with embeddings
+func (db *PGDatabase) CreateBookmarkChunks(ctx context.Context, chunks []model.BookmarkChunk) error {
+	if len(chunks) == 0 {
+		return nil
+	}
+
+	return db.withTx(ctx, func(tx *sqlx.Tx) error {
+		stmt, err := tx.PrepareContext(ctx, `
+			INSERT INTO bookmark_chunks (bookmark_id, chunk_index, content, embedding)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (bookmark_id, chunk_index) DO UPDATE 
+			SET content = EXCLUDED.content, embedding = EXCLUDED.embedding
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to prepare chunk insert statement: %w", err)
+		}
+		defer stmt.Close()
+
+		for _, chunk := range chunks {
+			// Convert []float32 to pgvector format string
+			embeddingStr := float32SliceToVectorString(chunk.Embedding)
+			_, err := stmt.ExecContext(ctx, chunk.BookmarkID, chunk.ChunkIndex, chunk.Content, embeddingStr)
+			if err != nil {
+				return fmt.Errorf("failed to insert chunk %d for bookmark %d: %w", chunk.ChunkIndex, chunk.BookmarkID, err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// GetBookmarkChunks returns all chunks for a bookmark
+func (db *PGDatabase) GetBookmarkChunks(ctx context.Context, bookmarkID int) ([]model.BookmarkChunk, error) {
+	var chunks []model.BookmarkChunk
+	err := db.SelectContext(ctx, &chunks, `
+		SELECT id, bookmark_id, chunk_index, content, created_at
+		FROM bookmark_chunks 
+		WHERE bookmark_id = $1 
+		ORDER BY chunk_index
+	`, bookmarkID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bookmark chunks: %w", err)
+	}
+	return chunks, nil
+}
+
+// DeleteBookmarkChunks removes all chunks for a bookmark
+func (db *PGDatabase) DeleteBookmarkChunks(ctx context.Context, bookmarkID int) error {
+	_, err := db.ExecContext(ctx, `DELETE FROM bookmark_chunks WHERE bookmark_id = $1`, bookmarkID)
+	if err != nil {
+		return fmt.Errorf("failed to delete bookmark chunks: %w", err)
+	}
+	return nil
+}
+
+// UpdateBookmarkEmbeddingStatus updates the embedding status for a bookmark
+func (db *PGDatabase) UpdateBookmarkEmbeddingStatus(ctx context.Context, bookmarkID int, status model.EmbeddingStatus, errorMsg *string) error {
+	var err error
+	if status == model.EmbeddingStatusCompleted {
+		_, err = db.ExecContext(ctx, `
+			UPDATE bookmark 
+			SET embedding_status = $1, embedding_error = NULL, embedded_at = CURRENT_TIMESTAMP 
+			WHERE id = $2
+		`, status, bookmarkID)
+	} else {
+		_, err = db.ExecContext(ctx, `
+			UPDATE bookmark 
+			SET embedding_status = $1, embedding_error = $2 
+			WHERE id = $3
+		`, status, errorMsg, bookmarkID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to update embedding status: %w", err)
+	}
+	return nil
+}
+
+// GetBookmarksByEmbeddingStatus returns bookmarks with the given embedding status
+func (db *PGDatabase) GetBookmarksByEmbeddingStatus(ctx context.Context, status model.EmbeddingStatus, limit int) ([]model.BookmarkDTO, error) {
+	var bookmarks []model.BookmarkDTO
+	err := db.SelectContext(ctx, &bookmarks, `
+		SELECT id, url, title, excerpt, author, public, created_at, modified_at, 
+		       content, html, has_content
+		FROM bookmark 
+		WHERE embedding_status = $1 
+		ORDER BY id 
+		LIMIT $2
+	`, status, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bookmarks by embedding status: %w", err)
+	}
+	return bookmarks, nil
+}
+
+// SearchSimilarChunks finds chunks similar to the given embedding vector
+func (db *PGDatabase) SearchSimilarChunks(ctx context.Context, embedding []float32, threshold float64, limit int) ([]model.ChunkResult, error) {
+	embeddingStr := float32SliceToVectorString(embedding)
+
+	var results []model.ChunkResult
+	err := db.SelectContext(ctx, &results, `
+		SELECT 
+			bc.bookmark_id,
+			bc.chunk_index,
+			bc.content,
+			1 - (bc.embedding <=> $1::vector) as similarity
+		FROM bookmark_chunks bc
+		WHERE 1 - (bc.embedding <=> $1::vector) >= $2
+		ORDER BY bc.embedding <=> $1::vector
+		LIMIT $3
+	`, embeddingStr, threshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search similar chunks: %w", err)
+	}
+	return results, nil
+}
+
+// GetEmbeddingStatusSummary returns aggregate counts of embedding statuses
+func (db *PGDatabase) GetEmbeddingStatusSummary(ctx context.Context) (*model.EmbeddingStatusSummary, error) {
+	var summary model.EmbeddingStatusSummary
+	err := db.GetContext(ctx, &summary, `
+		SELECT 
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE embedding_status = 'pending') as pending,
+			COUNT(*) FILTER (WHERE embedding_status = 'processing') as processing,
+			COUNT(*) FILTER (WHERE embedding_status = 'completed') as completed,
+			COUNT(*) FILTER (WHERE embedding_status = 'failed') as failed,
+			COUNT(*) FILTER (WHERE embedding_status = 'skipped') as skipped
+		FROM bookmark
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get embedding status summary: %w", err)
+	}
+	return &summary, nil
+}
+
+// float32SliceToVectorString converts a []float32 to a pgvector string format
+func float32SliceToVectorString(embedding []float32) string {
+	if len(embedding) == 0 {
+		return "[]"
+	}
+
+	var sb strings.Builder
+	sb.WriteString("[")
+	for i, v := range embedding {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(strconv.FormatFloat(float64(v), 'f', -1, 32))
+	}
+	sb.WriteString("]")
+	return sb.String()
 }
