@@ -518,11 +518,11 @@ echo "✓ Embedding lifecycle automation works"
 
 ### Tasks
 
-- [ ] Create Pinia store `webapp/src/stores/chat.ts`
+- [x] Create Pinia store `webapp/src/stores/chat.ts`
   - State: messages[], isOpen, isStreaming, embeddingStatus
   - Actions: sendMessage(), openPanel(), closePanel(), clearHistory()
   - sessionStorage persistence for history
-- [ ] Create Vue component `webapp/src/components/ChatPanel.vue`
+- [x] Create Vue component `webapp/src/components/ChatPanel.vue`
   - Slide-out panel (400px width)
   - Message list with auto-scroll
   - User/assistant message bubbles
@@ -530,17 +530,17 @@ echo "✓ Embedding lifecycle automation works"
   - Input field with send button
   - "New conversation" button
   - Loading indicator during streaming
-- [ ] Implement SSE client in `webapp/src/services/chatApi.ts`
+- [x] Implement SSE client in `webapp/src/services/chatApi.ts`
   - `streamChat(message, history): EventSource`
   - Parse SSE events: chunk, sources, done, error
   - Reconnect on connection drop
-- [ ] Add chat toggle button to sidebar navigation
-- [ ] Create disabled state component
+- [x] Add chat toggle button to sidebar navigation
+- [x] Create disabled state component
   - Show when `GET /api/v1/chat/status` returns `enabled: false`
   - Display configuration instructions
   - Link to documentation
-- [ ] Style with Tailwind CSS (match existing Shiori design)
-- [ ] Add mobile responsive layout (overlay on small screens)
+- [x] Style with Tailwind CSS (match existing Shiori design)
+- [x] Add mobile responsive layout (overlay on small screens)
 
 ### Completion Criteria
 

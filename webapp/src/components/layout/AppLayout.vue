@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
-import Sidebar from './Sidebar.vue';
-import TopBar from './TopBar.vue';
+import { ref, onMounted, onUnmounted } from 'vue'
+import Sidebar from './Sidebar.vue'
+import TopBar from './TopBar.vue'
+import { ChatPanel } from '@/components/chat'
 
-const isMobile = ref(false);
+const isMobile = ref(false)
 
 const checkMobile = () => {
-  isMobile.value = window.innerWidth < 768;
-};
+  isMobile.value = window.innerWidth < 768
+}
 
 onMounted(() => {
-  checkMobile();
-  window.addEventListener('resize', checkMobile);
-});
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
 
 onUnmounted(() => {
-  window.removeEventListener('resize', checkMobile);
-});
+  window.removeEventListener('resize', checkMobile)
+})
 </script>
 
 <template>
@@ -41,10 +42,15 @@ onUnmounted(() => {
     </div>
 
     <!-- Mobile Navigation (only visible on mobile) -->
-    <nav v-if="isMobile"
-      class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 fixed bottom-0 left-0 right-0 z-10">
+    <nav
+      v-if="isMobile"
+      class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 fixed bottom-0 left-0 right-0 z-10"
+    >
       <!-- Mobile navigation content will be rendered by Sidebar component -->
     </nav>
+
+    <!-- Chat Panel -->
+    <ChatPanel :is-mobile="isMobile" />
   </div>
 </template>
 

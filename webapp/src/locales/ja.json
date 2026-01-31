@@ -24,7 +24,26 @@
     "tags": "タグ",
     "folders": "フォルダ",
     "settings": "設定",
-    "about": "概要"
+    "about": "概要",
+    "chat": "チャット"
+  },
+  "chat": {
+    "title": "AIに質問",
+    "empty_title": "ブックマークについて質問する",
+    "empty_description": "保存したコンテンツについて質問してください。AIがブックマークを検索し、関連する回答を提供します。",
+    "input_placeholder": "ブックマークについて質問...",
+    "send": "送信",
+    "stop": "停止",
+    "new_conversation": "新しい会話",
+    "sources": "ソース",
+    "embedding_progress": "{total}件中{pending}件のブックマークがインデックス待ち",
+    "disabled_title": "AIチャットは利用できません",
+    "disabled_description": "AIチャットには追加の設定が必要です。管理者に連絡するか、必要なサービスを設定してください。",
+    "setup_requirements": "必要条件:",
+    "requirement_postgres": "pgvector拡張機能付きPostgreSQL",
+    "requirement_ollama": "埋め込み用Ollama",
+    "requirement_anthropic": "Anthropic APIキー",
+    "view_documentation": "ドキュメントを見る"
   },
   "bookmarks": {
     "title": "ブックマーク",

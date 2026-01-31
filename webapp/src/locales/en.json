@@ -24,7 +24,26 @@
     "tags": "Tags",
     "folders": "Folders",
     "settings": "Settings",
-    "about": "About"
+    "about": "About",
+    "chat": "Chat"
+  },
+  "chat": {
+    "title": "Ask AI",
+    "empty_title": "Ask about your bookmarks",
+    "empty_description": "Ask questions about the content you've saved. The AI will search your bookmarks and provide relevant answers.",
+    "input_placeholder": "Ask about your bookmarks...",
+    "send": "Send",
+    "stop": "Stop",
+    "new_conversation": "New conversation",
+    "sources": "Sources",
+    "embedding_progress": "{pending} of {total} bookmarks pending indexing",
+    "disabled_title": "AI Chat Not Available",
+    "disabled_description": "AI-powered chat requires additional configuration. Please contact your administrator or set up the required services.",
+    "setup_requirements": "Requirements:",
+    "requirement_postgres": "PostgreSQL with pgvector extension",
+    "requirement_ollama": "Ollama for embeddings",
+    "requirement_anthropic": "Anthropic API key",
+    "view_documentation": "View documentation"
   },
   "bookmarks": {
     "title": "Bookmarks",

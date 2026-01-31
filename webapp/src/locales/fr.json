@@ -24,7 +24,26 @@
     "tags": "Tags",
     "folders": "Dossiers",
     "settings": "Paramètres",
-    "about": "À propos"
+    "about": "À propos",
+    "chat": "Chat"
+  },
+  "chat": {
+    "title": "Demander à l'IA",
+    "empty_title": "Posez des questions sur vos favoris",
+    "empty_description": "Posez des questions sur le contenu que vous avez enregistré. L'IA recherchera dans vos favoris et fournira des réponses pertinentes.",
+    "input_placeholder": "Posez une question sur vos favoris...",
+    "send": "Envoyer",
+    "stop": "Arrêter",
+    "new_conversation": "Nouvelle conversation",
+    "sources": "Sources",
+    "embedding_progress": "{pending} sur {total} favoris en attente d'indexation",
+    "disabled_title": "Chat IA non disponible",
+    "disabled_description": "Le chat IA nécessite une configuration supplémentaire. Veuillez contacter votre administrateur ou configurer les services requis.",
+    "setup_requirements": "Prérequis :",
+    "requirement_postgres": "PostgreSQL avec extension pgvector",
+    "requirement_ollama": "Ollama pour les embeddings",
+    "requirement_anthropic": "Clé API Anthropic",
+    "view_documentation": "Voir la documentation"
   },
   "bookmarks": {
     "title": "Favoris",

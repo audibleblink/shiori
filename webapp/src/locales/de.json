@@ -24,7 +24,26 @@
     "tags": "Tags",
     "folders": "Ordner",
     "settings": "Einstellungen",
-    "about": "Über"
+    "about": "Über",
+    "chat": "Chat"
+  },
+  "chat": {
+    "title": "KI fragen",
+    "empty_title": "Fragen Sie zu Ihren Lesezeichen",
+    "empty_description": "Stellen Sie Fragen zu den gespeicherten Inhalten. Die KI durchsucht Ihre Lesezeichen und liefert relevante Antworten.",
+    "input_placeholder": "Fragen Sie zu Ihren Lesezeichen...",
+    "send": "Senden",
+    "stop": "Stopp",
+    "new_conversation": "Neue Konversation",
+    "sources": "Quellen",
+    "embedding_progress": "{pending} von {total} Lesezeichen warten auf Indexierung",
+    "disabled_title": "KI-Chat nicht verfügbar",
+    "disabled_description": "Der KI-Chat erfordert zusätzliche Konfiguration. Bitte kontaktieren Sie Ihren Administrator oder richten Sie die erforderlichen Dienste ein.",
+    "setup_requirements": "Anforderungen:",
+    "requirement_postgres": "PostgreSQL mit pgvector-Erweiterung",
+    "requirement_ollama": "Ollama für Embeddings",
+    "requirement_anthropic": "Anthropic API-Schlüssel",
+    "view_documentation": "Dokumentation anzeigen"
   },
   "bookmarks": {
     "title": "Lesezeichen",

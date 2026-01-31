@@ -24,7 +24,26 @@
     "tags": "Etiquetas",
     "folders": "Carpetas",
     "settings": "Configuración",
-    "about": "Acerca de"
+    "about": "Acerca de",
+    "chat": "Chat"
+  },
+  "chat": {
+    "title": "Preguntar IA",
+    "empty_title": "Pregunta sobre tus marcadores",
+    "empty_description": "Haz preguntas sobre el contenido que has guardado. La IA buscará en tus marcadores y proporcionará respuestas relevantes.",
+    "input_placeholder": "Pregunta sobre tus marcadores...",
+    "send": "Enviar",
+    "stop": "Detener",
+    "new_conversation": "Nueva conversación",
+    "sources": "Fuentes",
+    "embedding_progress": "{pending} de {total} marcadores pendientes de indexación",
+    "disabled_title": "Chat IA no disponible",
+    "disabled_description": "El chat con IA requiere configuración adicional. Por favor contacta a tu administrador o configura los servicios requeridos.",
+    "setup_requirements": "Requisitos:",
+    "requirement_postgres": "PostgreSQL con extensión pgvector",
+    "requirement_ollama": "Ollama para embeddings",
+    "requirement_anthropic": "Clave API de Anthropic",
+    "view_documentation": "Ver documentación"
   },
   "bookmarks": {
     "title": "Marcadores",
