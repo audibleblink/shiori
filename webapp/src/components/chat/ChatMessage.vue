@@ -14,8 +14,8 @@ const isUser = computed(() => props.message.role === 'user')
 const hasSources = computed(() => props.message.sources && props.message.sources.length > 0)
 
 function navigateToBookmark(source: BookmarkSource) {
-  // Open bookmark in new tab
-  window.open(`/bookmark/${source.id}`, '_blank')
+  // Open original URL in new tab
+  window.open(source.url, '_blank')
 }
 </script>
 

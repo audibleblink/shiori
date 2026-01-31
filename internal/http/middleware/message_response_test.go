@@ -167,4 +167,36 @@ func TestMessageResponseMiddleware(t *testing.T) {
 		// Verify headers are preserved
 		assert.Equal(t, "test-value", w.Header().Get("X-Custom-Header"))
 	})
+
+	t.Run("skips /api/v1/ paths", func(t *testing.T) {
+		// Create test handler that returns JSON
+		handler := func(deps model.Dependencies, c model.WebContext) {
+			response := map[string]string{"data": "test"}
+			c.ResponseWriter().Header().Set("Content-Type", "application/json")
+			c.ResponseWriter().WriteHeader(http.StatusOK)
+			json.NewEncoder(c.ResponseWriter()).Encode(response)
+		}
+
+		// Create test context
+		c, w := testutil.NewTestWebContextWithMethod("GET", "/api/v1/test")
+
+		// Create and apply middleware
+		middleware := NewMessageResponseMiddleware(deps)
+		require.NoError(t, middleware.OnRequest(deps, c))
+
+		// Execute handler
+		handler(deps, c)
+
+		// Apply response middleware
+		require.NoError(t, middleware.OnResponse(deps, c))
+
+		// Verify response is NOT wrapped
+		var response map[string]string
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "test", response["data"])
+		_, hasOk := response["ok"]
+		assert.False(t, hasOk)
+	})
 }

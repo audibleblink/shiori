@@ -16,6 +16,7 @@ type BookmarksDomain interface {
 	HasThumbnail(b *BookmarkDTO) bool
 	GetBookmark(ctx context.Context, id DBID) (*BookmarkDTO, error)
 	GetBookmarks(ctx context.Context, ids []int) ([]BookmarkDTO, error)
+	ListBookmarks(ctx context.Context, opts ListBookmarksOptions) ([]BookmarkDTO, int, error)
 	UpdateBookmarkCache(ctx context.Context, bookmark BookmarkDTO, keepMetadata bool, skipExist bool) (*BookmarkDTO, error)
 	BulkUpdateBookmarkTags(ctx context.Context, bookmarkIDs []int, tagIDs []int) error
 	AddTagToBookmark(ctx context.Context, bookmarkID int, tagID int) error
@@ -26,6 +27,16 @@ type BookmarksDomain interface {
 	EnqueueBookmarkForEmbedding(bookmarkID int)
 	// EnqueueBookmarksForEmbedding queues multiple bookmarks for AI embedding generation
 	EnqueueBookmarksForEmbedding(bookmarkIDs []int)
+}
+
+type ListBookmarksOptions struct {
+	IDs          []int
+	Tags         []string
+	ExcludedTags []string
+	Keyword      string
+	WithContent  bool
+	Limit        int
+	Page         int
 }
 
 type AuthDomain interface {

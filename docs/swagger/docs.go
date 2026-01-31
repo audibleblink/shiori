@@ -287,6 +287,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/bookmarks": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "List bookmarks",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keyword",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tags (comma separated)",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Excluded tags (comma separated)",
+                        "name": "exclude",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api_v1.listBookmarksResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Token not provided/invalid"
+                    }
+                }
+            }
+        },
         "/api/v1/bookmarks/bulk/tags": {
             "put": {
                 "produces": [
@@ -493,6 +547,69 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Bookmark not found"
+                    }
+                }
+            }
+        },
+        "/api/v1/chat": {
+            "post": {
+                "description": "Send a message and receive AI-generated answers about your bookmarked content.\nResponse is streamed using Server-Sent Events (SSE).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Chat"
+                ],
+                "summary": "Chat with AI about bookmarks",
+                "parameters": [
+                    {
+                        "description": "Chat message and history",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api_v1.chatRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE stream with chunk, sources, and done events"
+                    },
+                    "400": {
+                        "description": "Invalid request payload"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "503": {
+                        "description": "AI features not available"
+                    }
+                }
+            }
+        },
+        "/api/v1/chat/status": {
+            "get": {
+                "description": "Returns whether AI chat is enabled and embedding statistics",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Chat"
+                ],
+                "summary": "Get chat feature status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ChatStatusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required"
                     }
                 }
             }
@@ -763,6 +880,20 @@ const docTemplate = `{
                 }
             }
         },
+        "api_v1.chatRequest": {
+            "type": "object",
+            "properties": {
+                "history": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.ChatMessage"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
         "api_v1.infoResponse": {
             "type": "object",
             "properties": {
@@ -785,6 +916,26 @@ const docTemplate = `{
                             "type": "string"
                         }
                     }
+                }
+            }
+        },
+        "api_v1.listBookmarksResponse": {
+            "type": "object",
+            "properties": {
+                "bookmarks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.BookmarkDTO"
+                    }
+                },
+                "maxPage": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -966,6 +1117,55 @@ const docTemplate = `{
                 },
                 "url": {
                     "type": "string"
+                }
+            }
+        },
+        "model.ChatMessage": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "\"user\" or \"assistant\"",
+                    "type": "string"
+                }
+            }
+        },
+        "model.ChatStatusResponse": {
+            "type": "object",
+            "properties": {
+                "embeddingStatus": {
+                    "$ref": "#/definitions/model.EmbeddingStatusSummary"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.EmbeddingStatusSummary": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                },
+                "failed": {
+                    "type": "integer"
+                },
+                "pending": {
+                    "type": "integer"
+                },
+                "processing": {
+                    "type": "integer"
+                },
+                "skipped": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },

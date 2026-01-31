@@ -23,10 +23,12 @@ export const useAuthStore = defineStore('auth', () => {
     const config = new Configuration({
       basePath: 'http://localhost:8080',
       accessToken: token.value || undefined,
-      headers: token.value ? {
-        'Authorization': `Bearer ${token.value}`,
-        'X-Shiori-Response-Format': 'new'
-      } : undefined
+      headers: token.value
+        ? {
+            Authorization: `Bearer ${token.value}`,
+            'X-Shiori-Response-Format': 'new',
+          }
+        : undefined,
     })
     return new AuthApi(config)
   }
@@ -83,16 +85,18 @@ export const useAuthStore = defineStore('auth', () => {
         try {
           // Try to parse the response body as JSON
           const responseBody = await err.response.json()
-          if (responseBody && responseBody.message) {
-            error.value = responseBody.message
-          } else if (responseBody && responseBody.error) {
+          // Server response format: {ok: boolean, message: {error: string} | string}
+          const message = responseBody?.message
+          if (typeof message === 'string') {
+            error.value = message
+          } else if (message?.error) {
+            error.value = message.error
+          } else if (responseBody?.error) {
             error.value = responseBody.error
-          } else if (typeof responseBody === 'string') {
-            error.value = responseBody
           } else {
             error.value = `Server error: ${err.response.status}`
           }
-        } catch (jsonError) {
+        } catch {
           // If response is not JSON, use status text
           error.value = err.response.statusText || `Server error: ${err.response.status}`
         }
@@ -213,6 +217,6 @@ export const useAuthStore = defineStore('auth', () => {
     validateToken,
     setRedirectDestination,
     getAndClearRedirectDestination,
-    clearAuth
+    clearAuth,
   }
 })

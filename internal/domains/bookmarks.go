@@ -3,6 +3,8 @@ package domains
 import (
 	"context"
 	"fmt"
+	"path"
+	"strconv"
 
 	"github.com/go-shiori/shiori/internal/core"
 	"github.com/go-shiori/shiori/internal/model"
@@ -10,6 +12,49 @@ import (
 
 type BookmarksDomain struct {
 	deps model.Dependencies
+}
+
+func (d *BookmarksDomain) ListBookmarks(ctx context.Context, opts model.ListBookmarksOptions) ([]model.BookmarkDTO, int, error) {
+	offset := (opts.Page - 1) * opts.Limit
+	if offset < 0 {
+		offset = 0
+	}
+
+	dbOpts := model.DBGetBookmarksOptions{
+		IDs:          opts.IDs,
+		Tags:         opts.Tags,
+		ExcludedTags: opts.ExcludedTags,
+		Keyword:      opts.Keyword,
+		WithContent:  opts.WithContent,
+		Limit:        opts.Limit,
+		Offset:       offset,
+		OrderMethod:  model.ByLastAdded,
+	}
+
+	count, err := d.deps.Database().GetBookmarksCount(ctx, dbOpts)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get bookmarks count: %w", err)
+	}
+
+	bookmarks, err := d.deps.Database().GetBookmarks(ctx, dbOpts)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get bookmarks: %w", err)
+	}
+
+	rootPath := d.deps.Config().Http.RootPath
+
+	for i := range bookmarks {
+		// Check if it has ebook and archive
+		bookmarks[i].HasEbook = d.HasEbook(&bookmarks[i])
+		bookmarks[i].HasArchive = d.HasArchive(&bookmarks[i])
+
+		if d.HasThumbnail(&bookmarks[i]) {
+			strID := strconv.Itoa(bookmarks[i].ID)
+			bookmarks[i].ImageURL = path.Join(rootPath, "bookmark", strID, "thumb")
+		}
+	}
+
+	return bookmarks, count, nil
 }
 
 func (d *BookmarksDomain) HasEbook(b *model.BookmarkDTO) bool {

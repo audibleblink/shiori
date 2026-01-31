@@ -164,6 +164,10 @@ func (s *HttpServer) Setup(cfg *config.Config, deps *dependencies.Dependencies) 
 		globalMiddleware...,
 	))
 	// Bookmarks
+	s.mux.HandleFunc("GET /api/v1/bookmarks", ToHTTPHandler(deps,
+		api_v1.HandleListBookmarks,
+		globalMiddleware...,
+	))
 	s.mux.HandleFunc("PUT /api/v1/bookmarks/cache", ToHTTPHandler(deps,
 		api_v1.HandleUpdateCache,
 		globalMiddleware...,

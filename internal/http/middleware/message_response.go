@@ -23,6 +23,10 @@ func (m *MessageResponseMiddleware) OnRequest(deps model.Dependencies, c model.W
 		return nil
 	}
 
+	if strings.HasPrefix(c.Request().URL.Path, "/api/v1/") {
+		return nil
+	}
+
 	// Create a response recorder and wrap the original ResponseWriter
 	recorder := newResponseRecorder(c.ResponseWriter())
 	c.SetResponseWriter(recorder)
@@ -31,6 +35,10 @@ func (m *MessageResponseMiddleware) OnRequest(deps model.Dependencies, c model.W
 
 func (m *MessageResponseMiddleware) OnResponse(deps model.Dependencies, c model.WebContext) error {
 	if c.Request().Header.Get("X-Shiori-Response-Format") == "new" {
+		return nil
+	}
+
+	if strings.HasPrefix(c.Request().URL.Path, "/api/v1/") {
 		return nil
 	}
 

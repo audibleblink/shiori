@@ -20,6 +20,15 @@ definitions:
     - bookmark_ids
     - tag_ids
     type: object
+  api_v1.chatRequest:
+    properties:
+      history:
+        items:
+          $ref: '#/definitions/model.ChatMessage'
+        type: array
+      message:
+        type: string
+    type: object
   api_v1.infoResponse:
     properties:
       database:
@@ -35,6 +44,19 @@ definitions:
           tag:
             type: string
         type: object
+    type: object
+  api_v1.listBookmarksResponse:
+    properties:
+      bookmarks:
+        items:
+          $ref: '#/definitions/model.BookmarkDTO'
+        type: array
+      maxPage:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
     type: object
   api_v1.loginRequestPayload:
     properties:
@@ -154,6 +176,38 @@ definitions:
         type: string
       url:
         type: string
+    type: object
+  model.ChatMessage:
+    properties:
+      content:
+        type: string
+      role:
+        description: '"user" or "assistant"'
+        type: string
+    type: object
+  model.ChatStatusResponse:
+    properties:
+      embeddingStatus:
+        $ref: '#/definitions/model.EmbeddingStatusSummary'
+      enabled:
+        type: boolean
+      error:
+        type: string
+    type: object
+  model.EmbeddingStatusSummary:
+    properties:
+      completed:
+        type: integer
+      failed:
+        type: integer
+      pending:
+        type: integer
+      processing:
+        type: integer
+      skipped:
+        type: integer
+      total:
+        type: integer
     type: object
   model.TagDTO:
     properties:
@@ -367,6 +421,41 @@ paths:
       summary: Refresh a token for an account
       tags:
       - Auth
+  /api/v1/bookmarks:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Limit per page
+        in: query
+        name: limit
+        type: integer
+      - description: Keyword
+        in: query
+        name: keyword
+        type: string
+      - description: Tags (comma separated)
+        in: query
+        name: tags
+        type: string
+      - description: Excluded tags (comma separated)
+        in: query
+        name: exclude
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api_v1.listBookmarksResponse'
+        "403":
+          description: Token not provided/invalid
+      summary: List bookmarks
+      tags:
+      - Auth
   /api/v1/bookmarks/{id}/tags:
     delete:
       parameters:
@@ -503,6 +592,49 @@ paths:
       summary: Get readable version of bookmark.
       tags:
       - Auth
+  /api/v1/chat:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Send a message and receive AI-generated answers about your bookmarked content.
+        Response is streamed using Server-Sent Events (SSE).
+      parameters:
+      - description: Chat message and history
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/api_v1.chatRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream with chunk, sources, and done events
+        "400":
+          description: Invalid request payload
+        "401":
+          description: Authentication required
+        "503":
+          description: AI features not available
+      summary: Chat with AI about bookmarks
+      tags:
+      - Chat
+  /api/v1/chat/status:
+    get:
+      description: Returns whether AI chat is enabled and embedding statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ChatStatusResponse'
+        "401":
+          description: Authentication required
+      summary: Get chat feature status
+      tags:
+      - Chat
   /api/v1/system/info:
     get:
       description: Get general system information like Shiori version, database, and

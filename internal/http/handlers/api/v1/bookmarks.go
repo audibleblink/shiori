@@ -4,14 +4,93 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/go-shiori/shiori/internal/http/middleware"
 	"github.com/go-shiori/shiori/internal/http/response"
 	"github.com/go-shiori/shiori/internal/model"
 )
+
+type listBookmarksResponse struct {
+	Bookmarks []model.BookmarkDTO `json:"bookmarks"`
+	Page      int                 `json:"page"`
+	MaxPage   int                 `json:"maxPage"`
+	Total     int                 `json:"total"`
+}
+
+// HandleListBookmarks lists bookmarks
+//
+//	@Summary					List bookmarks
+//	@Tags						Auth
+//	@securityDefinitions.apikey	ApiKeyAuth
+//	@Produce					json
+//	@Param						page	query		int		false	"Page number"
+//	@Param						limit	query		int		false	"Limit per page"
+//	@Param						keyword	query		string	false	"Keyword"
+//	@Param						tags	query		string	false	"Tags (comma separated)"
+//	@Param						exclude	query		string	false	"Excluded tags (comma separated)"
+//	@Success					200		{object}	listBookmarksResponse
+//	@Failure					403		{object}	nil	"Token not provided/invalid"
+//	@Router						/api/v1/bookmarks [get]
+func HandleListBookmarks(deps model.Dependencies, c model.WebContext) {
+	if err := middleware.RequireLoggedInUser(deps, c); err != nil {
+		response.SendError(c, http.StatusForbidden, err.Error())
+		return
+	}
+
+	// Parse query params
+	page, _ := strconv.Atoi(c.Request().URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(c.Request().URL.Query().Get("limit"))
+	if limit <= 0 {
+		limit = 30
+	}
+
+	keyword := c.Request().URL.Query().Get("keyword")
+	tagsStr := c.Request().URL.Query().Get("tags")
+	excludeStr := c.Request().URL.Query().Get("exclude")
+
+	var tags []string
+	if tagsStr != "" {
+		tags = strings.Split(tagsStr, ",")
+	}
+
+	var excludedTags []string
+	if excludeStr != "" {
+		excludedTags = strings.Split(excludeStr, ",")
+	}
+
+	opts := model.ListBookmarksOptions{
+		Page:         page,
+		Limit:        limit,
+		Keyword:      keyword,
+		Tags:         tags,
+		ExcludedTags: excludedTags,
+		WithContent:  false, // Listing usually doesn't need full content
+	}
+
+	bookmarks, count, err := deps.Domains().Bookmarks().ListBookmarks(c.Request().Context(), opts)
+	if err != nil {
+		response.SendError(c, http.StatusInternalServerError, "Failed to list bookmarks")
+		return
+	}
+
+	maxPage := int(math.Ceil(float64(count) / float64(limit)))
+
+	response.SendJSON(c, http.StatusOK, listBookmarksResponse{
+		Bookmarks: bookmarks,
+		Page:      page,
+		MaxPage:   maxPage,
+		Total:     count,
+	})
+}
 
 type updateCachePayload struct {
 	Ids           []int `json:"ids"    validate:"required"`
