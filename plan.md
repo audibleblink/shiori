@@ -145,19 +145,21 @@ psql $SHIORI_TEST_PG_URL -c "\d bookmark" | grep embedding_status
 
 ### Tasks
 
-- [ ] Create Ollama client in `internal/core/ollama_client.go`
+- [x] Create Ollama client in `internal/core/ollama_client.go`
   - `GenerateEmbedding(ctx context.Context, text string) ([]float32, error)`
   - HTTP client with configurable endpoint
   - Error handling and retries
-- [ ] Create text chunking utility in `internal/core/chunker.go`
+- [x] Create text chunking utility in `internal/core/chunker.go`
   - `ChunkText(text string, chunkSize int, overlap int) []string`
   - Token-aware chunking (use character approximation: ~4 chars/token)
   - Preserve sentence boundaries where possible
-- [ ] Implement `EmbeddingService` in `internal/domains/embedding.go`
+- [x] Implement `EmbeddingDomain` in `internal/domains/embedding.go`
   - `EmbedBookmark(ctx, bookmarkID)` - extract content, chunk, embed, store
-  - `SearchSimilar(ctx, userID, queryText, threshold, limit)` - embed query, vector search
+  - `SearchSimilar(ctx, queryText, threshold, limit)` - embed query, vector search
+  - `BackfillEmbeddings(ctx, batchSize, delayMs)` - process pending bookmarks
   - Status tracking (pending -> processing -> completed/failed)
-- [ ] Add embedding service to Dependencies struct
+- [x] Add embedding service to Dependencies struct
+- [x] Unit tests for Ollama client, chunker, and embedding domain
 
 ### Completion Criteria
 

@@ -59,3 +59,19 @@ type TagsDomain interface {
 	DeleteTag(ctx context.Context, id int) error
 	TagExists(ctx context.Context, id int) (bool, error)
 }
+
+// EmbeddingDomain handles embedding generation and similarity search
+type EmbeddingDomain interface {
+	// EmbedBookmark generates and stores embeddings for a bookmark
+	EmbedBookmark(ctx context.Context, bookmarkID int) error
+	// SearchSimilar finds chunks similar to the query text
+	SearchSimilar(ctx context.Context, query string, threshold float64, limit int) ([]ChunkResult, error)
+	// BackfillEmbeddings processes all bookmarks with pending embedding status
+	BackfillEmbeddings(ctx context.Context, batchSize int, delayMs int) error
+	// GetEmbeddingStatus returns the embedding status summary
+	GetEmbeddingStatus(ctx context.Context) (*EmbeddingStatusSummary, error)
+	// ReembedBookmark re-generates embeddings for a bookmark
+	ReembedBookmark(ctx context.Context, bookmarkID int) error
+	// IsOllamaAvailable checks if Ollama is reachable
+	IsOllamaAvailable(ctx context.Context) error
+}

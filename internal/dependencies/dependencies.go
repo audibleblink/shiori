@@ -36,6 +36,7 @@ type domains struct {
 	archiver  model.ArchiverDomain
 	storage   model.StorageDomain
 	tags      model.TagsDomain
+	embedding model.EmbeddingDomain
 }
 
 func (d *domains) Auth() model.AuthDomain                       { return d.auth }
@@ -50,6 +51,8 @@ func (d *domains) Storage() model.StorageDomain                 { return d.stora
 func (d *domains) SetStorage(storage model.StorageDomain)       { d.storage = storage }
 func (d *domains) Tags() model.TagsDomain                       { return d.tags }
 func (d *domains) SetTags(tags model.TagsDomain)                { d.tags = tags }
+func (d *domains) Embedding() model.EmbeddingDomain             { return d.embedding }
+func (d *domains) SetEmbedding(embedding model.EmbeddingDomain) { d.embedding = embedding }
 
 var _ model.DomainDependencies = (*domains)(nil)
 

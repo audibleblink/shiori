@@ -27,4 +27,6 @@ type DomainDependencies interface {
 	SetStorage(storage StorageDomain)
 	Tags() TagsDomain
 	SetTags(tags TagsDomain)
+	Embedding() EmbeddingDomain
+	SetEmbedding(embedding EmbeddingDomain)
 }
