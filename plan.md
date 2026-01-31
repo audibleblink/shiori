@@ -331,7 +331,7 @@ echo "✓ Chat RAG pipeline works end-to-end"
 
 ### Tasks
 
-- [ ] Create POST `/api/v1/chat` handler in `internal/http/handlers/api/v1/chat.go`
+- [x] Create POST `/api/v1/chat` handler in `internal/http/handlers/api/v1/chat.go`
   - Parse request: `{message, history[]}`
   - Validate authentication (require logged-in user)
   - Call ChatDomain.Chat()
@@ -341,13 +341,13 @@ echo "✓ Chat RAG pipeline works end-to-end"
     - `event: done` on completion
     - `event: error` on failures
   - Handle graceful degradation (AI not configured)
-- [ ] Create GET `/api/v1/chat/status` handler
+- [x] Create GET `/api/v1/chat/status` handler
   - Check if AI is enabled in config
   - Return embedding statistics via ChatDomain.GetEmbeddingStatus()
   - Include configuration hints if disabled
-- [ ] Register routes in `internal/http/http.go`
-- [ ] Add Swagger annotations
-- [ ] Update API documentation
+- [x] Register routes in `internal/http/server.go`
+- [x] Add Swagger annotations
+- [x] Add chat handler tests
 
 ### Completion Criteria
 

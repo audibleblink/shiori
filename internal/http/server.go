@@ -190,6 +190,16 @@ func (s *HttpServer) Setup(cfg *config.Config, deps *dependencies.Dependencies) 
 		globalMiddleware...,
 	))
 
+	// Chat (AI Q&A)
+	s.mux.HandleFunc("POST /api/v1/chat", ToHTTPHandler(deps,
+		api_v1.HandleChatPost,
+		globalMiddleware...,
+	))
+	s.mux.HandleFunc("GET /api/v1/chat/status", ToHTTPHandler(deps,
+		api_v1.HandleChatStatus,
+		globalMiddleware...,
+	))
+
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf("%s%d", cfg.Http.Address, cfg.Http.Port),
 		Handler: s.mux,
