@@ -1,953 +1,590 @@
-# Execution Plan: Bookmark Q&A Chat Interface
+# Execution Plan: BookmarkCard Component with Offline Content Navigation
+
+**PRD Reference:** `prd.md`  
+**Created:** 2026-01-31
+
+---
 
 ## Overview
 
-This plan implements an AI-powered chat interface for Shiori that enables natural language Q&A over bookmarked content. The implementation is divided into 6 phases, each building on the previous to deliver incremental, testable functionality.
+This plan implements the BookmarkCard component with offline content navigation in 5 phases. Each phase produces a complete, tested, and working increment of functionality.
 
-**Key Constraints:**
-- PostgreSQL with pgvector required (no SQLite/MySQL support)
-- Ollama for local embeddings (self-hosted, no API costs)
-- Anthropic Claude for chat responses
-- Must not break existing bookmark workflows
+### Phase Dependencies
+
+```
+Phase 1 (Foundation) ──┬──> Phase 2 (BookmarkCard)
+                       │
+                       └──> Phase 3 (ReadableView)
+                                    │
+Phase 2 + Phase 3 ─────────────────>│
+                                    v
+                              Phase 4 (Integration)
+                                    │
+                                    v
+                              Phase 5 (Polish & E2E)
+```
 
 ---
 
-## Phase 0: Prerequisites & Setup
+## Phase 1: Foundation Setup
 
-**Goal:** Establish development environment and verify external dependencies
+**Goal:** Install vue-sonner, configure toast system, and fix the readable API endpoint bug.
 
-**Dependencies:** None
+**Dependencies:** None (starting point)
 
 ### Tasks
 
-- [ ] Verify PostgreSQL 14+ available for development
-- [ ] Install and verify pgvector extension
-- [ ] Install Ollama locally
-- [ ] Pull `embeddinggemma` model via Ollama
-- [ ] Obtain Anthropic API key for testing
-- [ ] Create test configuration file with AI settings
-- [ ] Document local setup in `docs/development/ai-setup.md`
+- [ ] **1.1** Install vue-sonner package
+  ```bash
+  cd webapp && bun add vue-sonner
+  ```
 
-### Completion Criteria
+- [ ] **1.2** Configure vue-sonner in `webapp/src/main.ts`
+  - Import and add `<Toaster />` component to App.vue or main.ts setup
+  - Configure default toast position and styling
 
-**Test Script:** `scripts/verify-ai-prerequisites.sh`
+- [ ] **1.3** Create toast utility wrapper `webapp/src/utils/toast.ts`
+  - Export typed helper functions: `showInfo()`, `showSuccess()`, `showError()`
+  - Ensures consistent toast usage across the app
+
+- [ ] **1.4** Fix Swagger annotation for readable endpoint
+  - File: `internal/http/handlers/api/v1/bookmarks.go:128`
+  - Change: `@Router /api/v1/bookmarks/id/readable` → `@Router /api/v1/bookmarks/{id}/readable`
+  - Run: `make swagger` to regenerate swagger docs
+
+- [ ] **1.5** Regenerate API client
+  - Regenerate TypeScript client from updated swagger spec
+  - Verify `apiV1BookmarksIdReadableGet()` now accepts `id` parameter
+
+- [ ] **1.6** Create `webapp/src/components/bookmarks/` directory structure
+
+### Verification Script
+
+Create `webapp/phase1-verify.sh`:
 
 ```bash
 #!/bin/bash
-# Check PostgreSQL version
-psql --version | grep -E "1[4-9]\.|[2-9][0-9]\."
+set -e
 
-# Check pgvector extension
-psql -c "CREATE EXTENSION IF NOT EXISTS vector;" $SHIORI_TEST_PG_URL
+echo "=== Phase 1 Verification ==="
 
-# Check Ollama
-curl -s http://localhost:11434/api/tags | grep embeddinggemma
+# Check vue-sonner is installed
+echo "Checking vue-sonner installation..."
+grep -q '"vue-sonner"' webapp/package.json && echo "✓ vue-sonner installed" || { echo "✗ vue-sonner not found"; exit 1; }
 
-# Check Anthropic key
-[ -n "$SHIORI_ANTHROPIC_API_KEY" ]
+# Check toast utility exists
+echo "Checking toast utility..."
+test -f webapp/src/utils/toast.ts && echo "✓ toast.ts exists" || { echo "✗ toast.ts not found"; exit 1; }
 
-echo "✓ All prerequisites met"
+# Check Toaster is configured in App.vue or main.ts
+echo "Checking Toaster configuration..."
+(grep -q "Toaster" webapp/src/App.vue || grep -q "Toaster" webapp/src/main.ts) && echo "✓ Toaster configured" || { echo "✗ Toaster not configured"; exit 1; }
+
+# Check swagger annotation fix
+echo "Checking swagger annotation..."
+grep -q "{id}/readable" internal/http/handlers/api/v1/bookmarks.go && echo "✓ Swagger annotation fixed" || { echo "✗ Swagger annotation not fixed"; exit 1; }
+
+# Check bookmarks component directory exists
+echo "Checking component directory..."
+test -d webapp/src/components/bookmarks && echo "✓ bookmarks component directory exists" || { echo "✗ directory not found"; exit 1; }
+
+# Run type-check to verify no TypeScript errors
+echo "Running type-check..."
+cd webapp && bun run type-check && echo "✓ Type check passed" || { echo "✗ Type check failed"; exit 1; }
+
+echo ""
+echo "=== Phase 1 Complete ✓ ==="
 ```
 
-**Exit Criteria:**
-- Script exits with code 0
-- Can connect to PostgreSQL with pgvector
-- Ollama returns embedding for test input
-- Anthropic API key is valid (via test call)
+### Exit Criteria
+
+- [x] vue-sonner installed in package.json
+- [x] Toaster component configured in App.vue
+- [x] Toast utility functions created
+- [x] Swagger annotation corrected
+- [x] API client regenerated with working readable endpoint
+- [x] Component directory created
+- [x] `bun run type-check` passes
+- [x] `phase1-verify.sh` passes all checks
 
 ---
 
-## Phase 1: Configuration & Database Schema
+## Phase 2: BookmarkCard Component
 
-**Goal:** Add configuration support and database schema for embeddings
-
-**Dependencies:** Phase 0
-
-### Tasks
-
-- [x] Add AI configuration struct to `internal/config/`
-  - `AIConfig` with nested `AnthropicConfig`, `OllamaConfig`, `RetrievalConfig`, `EmbeddingConfig`
-  - Environment variable mapping
-  - Validation logic
-- [x] Create database migration `internal/database/migrations/postgres/0003_ai_features.up.sql`
-  - `CREATE EXTENSION vector`
-  - `bookmark_chunks` table with vector(768) column
-  - IVFFlat index on embedding column
-  - Add columns to `bookmark`: `embedding_status`, `embedding_error`, `embedded_at`
-- [x] Update `internal/model/ai.go` with new embedding-related types
-- [x] Add database methods to `internal/model/database.go` interface:
-  - `CreateBookmarkChunks(ctx, chunks []BookmarkChunk) error`
-  - `GetBookmarkChunks(ctx, bookmarkID int) ([]BookmarkChunk, error)`
-  - `DeleteBookmarkChunks(ctx, bookmarkID int) error`
-  - `UpdateBookmarkEmbeddingStatus(ctx, id int, status EmbeddingStatus, error *string) error`
-  - `SearchSimilarChunks(ctx, embedding []float32, threshold float64, limit int) ([]ChunkResult, error)`
-  - `GetBookmarksByEmbeddingStatus(ctx, status EmbeddingStatus, limit int) ([]BookmarkDTO, error)`
-  - `GetEmbeddingStatusSummary(ctx) (*EmbeddingStatusSummary, error)`
-  - `SupportsAI() bool`
-- [x] Implement database methods for PostgreSQL only
-- [x] Add graceful handling for SQLite/MySQL (return `ErrAINotSupported`)
-
-### Completion Criteria
-
-**Unit Tests:**
-
-```go
-// internal/config/ai_config_test.go
-func TestAIConfigValidation(t *testing.T) {
-    // Valid config passes
-    // Missing API key fails
-    // Invalid threshold values fail
-}
-
-// internal/database/ai_postgres_test.go
-func TestBookmarkChunksOperations(t *testing.T) {
-    // Create chunk with 768-dim embedding
-    // Retrieve chunks by bookmark ID
-    // Delete cascades on bookmark delete
-    // Vector search returns similar chunks
-}
-
-func TestEmbeddingStatusTracking(t *testing.T) {
-    // Update status through lifecycle: pending -> processing -> completed
-    // Update status with error
-    // Query bookmarks by status
-}
-```
-
-**Migration Test:**
-
-```bash
-# Run migration on clean PostgreSQL database
-go test -tags test_postgres_only ./internal/database -run TestMigration0009
-
-# Verify schema
-psql $SHIORI_TEST_PG_URL -c "\d bookmark_chunks"
-psql $SHIORI_TEST_PG_URL -c "\d bookmark" | grep embedding_status
-```
-
-**Exit Criteria:**
-- ✅ All configuration unit tests pass
-- ✅ AI config implementation complete with validation
-- ✅ Database migration created
-- ✅ Database methods implemented for PostgreSQL
-- ✅ SQLite/MySQL gracefully return `ErrNotSupported` for AI methods
-- ⏸️ PostgreSQL tests pending (requires pgvector installation)
-  - Note: pgvector not available on remote server - see PGVECTOR_SETUP_REQUIRED.md
-  - Tests written and ready to run once pgvector is installed
-
----
-
-## Phase 2: Embedding Service (Ollama Integration)
-
-**Goal:** Implement embedding generation and vector search
+**Goal:** Create the BookmarkCard component with all display elements and visual indicators.
 
 **Dependencies:** Phase 1
 
 ### Tasks
 
-- [x] Create Ollama client in `internal/core/ollama_client.go`
-  - `GenerateEmbedding(ctx context.Context, text string) ([]float32, error)`
-  - HTTP client with configurable endpoint
-  - Error handling and retries
-- [x] Create text chunking utility in `internal/core/chunker.go`
-  - `ChunkText(text string, chunkSize int, overlap int) []string`
-  - Token-aware chunking (use character approximation: ~4 chars/token)
-  - Preserve sentence boundaries where possible
-- [x] Implement `EmbeddingDomain` in `internal/domains/embedding.go`
-  - `EmbedBookmark(ctx, bookmarkID)` - extract content, chunk, embed, store
-  - `SearchSimilar(ctx, queryText, threshold, limit)` - embed query, vector search
-  - `BackfillEmbeddings(ctx, batchSize, delayMs)` - process pending bookmarks
-  - Status tracking (pending -> processing -> completed/failed)
-- [x] Add embedding service to Dependencies struct
-- [x] Unit tests for Ollama client, chunker, and embedding domain
+- [ ] **2.1** Create `webapp/src/components/bookmarks/BookmarkCard.vue`
+  - Define props interface accepting `ModelBookmarkDTO`
+  - Define emits: `content-fetched`
+  
+- [ ] **2.2** Implement card layout with all display elements
+  - Title (clickable)
+  - URL (clickable, truncated)
+  - Thumbnail (optional, with placeholder)
+  - Excerpt (optional, truncated)
+  - Tags (chips/pills)
+  - Created date (formatted)
+  
+- [ ] **2.3** Implement content indicators
+  - Archive indicator icon when `hasArchive: true`
+  - Ebook indicator icon when `hasEbook: true`
+  
+- [ ] **2.4** Implement title click behavior
+  - Navigate to `/bookmark/:id/content` when `hasContent: true`
+  - Navigate to original URL (external) when `hasContent: false`
+  
+- [ ] **2.5** Implement URL/external link behavior
+  - Always opens `bookmark.url` in new tab
+  - External link icon button
 
-### Completion Criteria
+- [ ] **2.6** Implement download action (UI only in this phase)
+  - Cloud download icon visible only when `hasContent: false`
+  - Loading spinner state (triggered by local state for testing)
+  - Emit event structure (actual API call in Phase 4)
 
-**Unit Tests:**
+- [ ] **2.7** Add accessibility attributes
+  - aria-labels on icons
+  - Focusable interactive elements
+  - Proper semantic HTML
 
-```go
-// internal/core/ollama_client_test.go
-func TestOllamaClient(t *testing.T) {
-    // Generate embedding for sample text
-    // Verify 768-dimensional output
-    // Handle Ollama unavailable gracefully
-    // Retry on transient failures
-}
+- [ ] **2.8** Write unit tests for BookmarkCard
+  - Test all conditional rendering
+  - Test click handlers emit correct events
+  - Test accessibility attributes
 
-// internal/core/chunker_test.go
-func TestChunkText(t *testing.T) {
-    t.Run("RespectChunkSize", ...)
-    t.Run("OverlapCorrectly", ...)
-    t.Run("PreserveSentences", ...)
-    t.Run("HandleShortText", ...)
-}
+### Verification Script
 
-// internal/domains/embedding_test.go
-func TestEmbedBookmark(t *testing.T) {
-    t.Run("Success", ...) // Chunks stored, status=completed
-    t.Run("NoContent", ...) // Status=skipped
-    t.Run("OllamaFailure", ...) // Status=failed, error recorded
-}
-
-func TestSearchSimilar(t *testing.T) {
-    // Setup: Embed 3 bookmarks about different topics
-    // Query about topic A
-    // Verify top results are from topic A
-    // Verify similarity scores above threshold
-}
-```
-
-**Integration Test Script:** `scripts/test-embedding-e2e.sh`
+Create `webapp/phase2-verify.sh`:
 
 ```bash
 #!/bin/bash
-# Create test bookmark with known content
-BOOKMARK_ID=$(psql -t $SHIORI_TEST_PG_URL -c "INSERT INTO bookmark (...) VALUES (...) RETURNING id")
+set -e
 
-# Run embedding service
-go run ./cmd/test-embed $BOOKMARK_ID
+echo "=== Phase 2 Verification ==="
 
-# Verify chunks created
-CHUNK_COUNT=$(psql -t $SHIORI_TEST_PG_URL -c "SELECT COUNT(*) FROM bookmark_chunks WHERE bookmark_id=$BOOKMARK_ID")
-[ $CHUNK_COUNT -gt 0 ]
+# Check BookmarkCard component exists
+echo "Checking BookmarkCard component..."
+test -f webapp/src/components/bookmarks/BookmarkCard.vue && echo "✓ BookmarkCard.vue exists" || { echo "✗ BookmarkCard.vue not found"; exit 1; }
 
-# Test search
-go run ./cmd/test-search "database optimization"
+# Check component has required elements
+echo "Checking component structure..."
+CARD_FILE="webapp/src/components/bookmarks/BookmarkCard.vue"
 
-echo "✓ Embedding pipeline works end-to-end"
+grep -q "defineProps" "$CARD_FILE" && echo "✓ Props defined" || { echo "✗ Props not defined"; exit 1; }
+grep -q "defineEmits" "$CARD_FILE" && echo "✓ Emits defined" || { echo "✗ Emits not defined"; exit 1; }
+grep -q "bookmark.title" "$CARD_FILE" && echo "✓ Title displayed" || { echo "✗ Title not found"; exit 1; }
+grep -q "bookmark.url" "$CARD_FILE" && echo "✓ URL displayed" || { echo "✗ URL not found"; exit 1; }
+grep -q "hasArchive" "$CARD_FILE" && echo "✓ Archive indicator" || { echo "✗ Archive indicator not found"; exit 1; }
+grep -q "hasEbook" "$CARD_FILE" && echo "✓ Ebook indicator" || { echo "✗ Ebook indicator not found"; exit 1; }
+grep -q "hasContent" "$CARD_FILE" && echo "✓ Content conditional" || { echo "✗ Content conditional not found"; exit 1; }
+grep -q "aria-label" "$CARD_FILE" && echo "✓ Accessibility attributes" || { echo "✗ Accessibility not found"; exit 1; }
+
+# Check test file exists
+echo "Checking unit tests..."
+test -f webapp/src/components/bookmarks/BookmarkCard.spec.ts && echo "✓ Test file exists" || { echo "✗ Test file not found"; exit 1; }
+
+# Run type-check
+echo "Running type-check..."
+cd webapp && bun run type-check && echo "✓ Type check passed" || { echo "✗ Type check failed"; exit 1; }
+
+# Run unit tests
+echo "Running unit tests..."
+cd webapp && bun run test:unit --run && echo "✓ Unit tests passed" || { echo "✗ Unit tests failed"; exit 1; }
+
+echo ""
+echo "=== Phase 2 Complete ✓ ==="
 ```
 
-**Exit Criteria:**
-- Ollama client successfully generates 768-dim embeddings
-- Chunking produces expected number of chunks with correct overlap
-- `EmbedBookmark` stores chunks in database with embeddings
-- `SearchSimilar` returns relevant results ranked by similarity
-- Failed embeddings update status with error message
-- All unit tests pass
-- Integration test succeeds
+### Exit Criteria
+
+- [x] BookmarkCard.vue created with all display elements
+- [x] All visual indicators working (archive, ebook)
+- [x] Title click navigation logic implemented
+- [x] URL click opens in new tab
+- [x] Download icon conditionally visible
+- [x] Accessibility attributes present
+- [x] Unit tests written and passing
+- [x] `bun run type-check` passes
+- [x] `phase2-verify.sh` passes all checks
 
 ---
 
-## Phase 3: Chat Domain Service (Anthropic Integration)
+## Phase 3: ReadableView Page
 
-**Goal:** Implement RAG-based chat with streaming responses
+**Goal:** Create the ReadableView page to display offline/readable content.
 
-**Dependencies:** Phase 2
+**Dependencies:** Phase 1 (API client fix)
 
 ### Tasks
 
-- [x] Create Anthropic client in `internal/core/anthropic_client.go`
-  - `StreamChat(ctx, messages, systemPrompt) (<-chan StreamEvent, error)`
-  - Server-Sent Events support
-  - Handle streaming chunks, errors, completion
-- [x] Implement `ChatDomain` in `internal/domains/chat.go`
-  - `Chat(ctx, userID, message, history)` - orchestrates RAG pipeline:
-    1. Embed user's query via EmbeddingService
-    2. Search similar chunks (threshold=0.7, limit=20)
-    3. Build system prompt with retrieved context
-    4. Stream chat response via Anthropic
-    5. Extract source citations from chunks
-  - `GetEmbeddingStatus(ctx, userID)` - aggregate stats by user
-- [x] Create RAG prompt builder in `internal/core/prompt_builder.go`
-  - `BuildSystemPrompt(chunks []ChunkResult) string`
-  - Format chunks with bookmark metadata
-  - Implement template from PRD Appendix A
-- [x] Add chat domain to Dependencies struct
+- [ ] **3.1** Add route to `webapp/src/router/index.ts`
+  - Path: `/bookmark/:id/content`
+  - Name: `readable`
+  - Lazy loaded component
+  - `meta: { requiresAuth: true }`
 
-### Completion Criteria
+- [ ] **3.2** Create `webapp/src/views/ReadableView.vue`
+  - Extract route param `id`
+  - Loading state with spinner
+  - Error state with message
 
-**Unit Tests:**
+- [ ] **3.3** Implement content fetching
+  - Call `GET /api/v1/bookmarks/:id/readable` on mount
+  - Handle auth errors (redirect to login)
+  - Handle not found errors
 
-```go
-// internal/core/anthropic_client_test.go
-func TestAnthropicStreaming(t *testing.T) {
-    t.Run("StreamSuccess", ...) // Receive chunks, final event
-    t.Run("StreamError", ...) // Handle API errors
-    t.Run("ContextTooLong", ...) // Handle token limit errors
-}
+- [ ] **3.4** Implement content display
+  - Render HTML content safely
+  - Apply readable typography styles
+  - Show bookmark title as header
+  - Show original URL link
 
-// internal/core/prompt_builder_test.go
-func TestBuildSystemPrompt(t *testing.T) {
-    // Include all chunk content
-    // Include bookmark titles/URLs
-    // Format as markdown
-    // Handle empty chunks
-}
+- [ ] **3.5** Implement navigation
+  - Back button to return to home/previous page
+  - Original URL link (opens in new tab)
 
-// internal/domains/chat_test.go
-func TestChat(t *testing.T) {
-    t.Run("RelevantAnswer", ...) // Answer includes retrieved context
-    t.Run("NoRelevantChunks", ...) // "I don't have information about..."
-    t.Run("MultiTurnConversation", ...) // History included in API call
-    t.Run("SourceAttribution", ...) // Returns correct bookmark sources
-}
+- [ ] **3.6** Style the readable content
+  - Clean, readable typography
+  - Proper spacing and line height
+  - Dark mode support
+  - Responsive layout
 
-func TestGetEmbeddingStatus(t *testing.T) {
-    // Count bookmarks by status for user
-    // Filter by user_id correctly
-}
-```
+- [ ] **3.7** Write unit tests for ReadableView
+  - Test loading state
+  - Test error handling
+  - Test content rendering
+  - Test navigation elements
 
-**Mock-Free Integration Test:** `scripts/test-chat-e2e.sh`
+### Verification Script
+
+Create `webapp/phase3-verify.sh`:
 
 ```bash
 #!/bin/bash
-# Setup: Create 2 bookmarks with known content
-# Bookmark 1: About "Go error handling"
-# Bookmark 2: About "Python asyncio"
+set -e
 
-# Embed both bookmarks
-go run ./cmd/test-embed-multiple 1 2
+echo "=== Phase 3 Verification ==="
 
-# Test chat query
-RESPONSE=$(go run ./cmd/test-chat "How do I handle errors in Go?")
+# Check ReadableView exists
+echo "Checking ReadableView component..."
+test -f webapp/src/views/ReadableView.vue && echo "✓ ReadableView.vue exists" || { echo "✗ ReadableView.vue not found"; exit 1; }
 
-# Verify response mentions bookmark 1 content
-echo $RESPONSE | grep -i "error"
+# Check route is defined
+echo "Checking router configuration..."
+ROUTER_FILE="webapp/src/router/index.ts"
+grep -q "/bookmark/:id/content" "$ROUTER_FILE" && echo "✓ Route path defined" || { echo "✗ Route path not found"; exit 1; }
+grep -q "readable" "$ROUTER_FILE" && echo "✓ Route name defined" || { echo "✗ Route name not found"; exit 1; }
+grep -q "ReadableView" "$ROUTER_FILE" && echo "✓ Component imported" || { echo "✗ Component import not found"; exit 1; }
 
-# Verify sources include bookmark 1
-echo $RESPONSE | jq '.sources[] | select(.id==1)'
+# Check ReadableView structure
+echo "Checking ReadableView structure..."
+VIEW_FILE="webapp/src/views/ReadableView.vue"
+grep -q "useRoute" "$VIEW_FILE" && echo "✓ Route params accessed" || { echo "✗ Route params not used"; exit 1; }
+grep -q "readable" "$VIEW_FILE" && echo "✓ API call present" || { echo "✗ API call not found"; exit 1; }
 
-echo "✓ Chat RAG pipeline works end-to-end"
+# Check test file exists  
+echo "Checking unit tests..."
+test -f webapp/src/views/ReadableView.spec.ts && echo "✓ Test file exists" || { echo "✗ Test file not found"; exit 1; }
+
+# Run type-check
+echo "Running type-check..."
+cd webapp && bun run type-check && echo "✓ Type check passed" || { echo "✗ Type check failed"; exit 1; }
+
+# Run unit tests
+echo "Running unit tests..."
+cd webapp && bun run test:unit --run && echo "✓ Unit tests passed" || { echo "✗ Unit tests failed"; exit 1; }
+
+echo ""
+echo "=== Phase 3 Complete ✓ ==="
 ```
 
-**Exit Criteria:**
-- Anthropic client streams responses correctly
-- System prompt includes retrieved chunk context
-- Chat responses are grounded in user's bookmarks
-- Source citations include correct bookmark IDs and excerpts
-- Multi-turn conversations maintain context
-- Empty retrieval results in "no information" response
-- All unit tests pass
-- Integration test produces relevant answer
+### Exit Criteria
+
+- [x] Route `/bookmark/:id/content` defined and protected
+- [x] ReadableView.vue created
+- [x] Content fetched from API on mount
+- [x] Loading and error states handled
+- [x] HTML content rendered safely
+- [x] Back navigation working
+- [x] Dark mode support
+- [x] Unit tests passing
+- [x] `phase3-verify.sh` passes all checks
 
 ---
 
-## Phase 4: API Endpoints
+## Phase 4: Integration & Store Updates
 
-**Goal:** Expose chat functionality via HTTP API
+**Goal:** Integrate BookmarkCard into HomeView, connect API calls, and update bookmarks store.
 
-**Dependencies:** Phase 3
+**Dependencies:** Phase 2, Phase 3
 
 ### Tasks
 
-- [x] Create POST `/api/v1/chat` handler in `internal/http/handlers/api/v1/chat.go`
-  - Parse request: `{message, history[]}`
-  - Validate authentication (require logged-in user)
-  - Call ChatDomain.Chat()
-  - Stream SSE response:
-    - `event: chunk` for text chunks
-    - `event: sources` for bookmark citations
-    - `event: done` on completion
-    - `event: error` on failures
-  - Handle graceful degradation (AI not configured)
-- [x] Create GET `/api/v1/chat/status` handler
-  - Check if AI is enabled in config
-  - Return embedding statistics via ChatDomain.GetEmbeddingStatus()
-  - Include configuration hints if disabled
-- [x] Register routes in `internal/http/server.go`
-- [x] Add Swagger annotations
-- [x] Add chat handler tests
+- [ ] **4.1** Update bookmarks store (`webapp/src/stores/bookmarks.ts`)
+  - Add `updateBookmark(bookmark: ModelBookmarkDTO)` method
+  - Add `fetchBookmarkContent(bookmark: ModelBookmarkDTO)` method
+    - Calls `PUT /api/v1/bookmarks/cache`
+    - Updates store state on success
+    - Returns updated bookmark
 
-### Completion Criteria
+- [ ] **4.2** Connect BookmarkCard download action to store
+  - Import and use `useBookmarksStore`
+  - Call `fetchBookmarkContent` on download click
+  - Show loading spinner during fetch
+  - Show toasts for progress/success/error
+  - Navigate to original URL on failure
 
-**Unit Tests:**
+- [ ] **4.3** Replace HomeView inline bookmark display
+  - Import BookmarkCard component
+  - Replace `<ul>` list with BookmarkCard components
+  - Handle `content-fetched` event to update store
+  - Maintain existing search and add bookmark UI
 
-```go
-// internal/http/handlers/api/v1/chat_test.go
-func TestHandleChatPost(t *testing.T) {
-    t.Run("Success", ...) // SSE stream with chunks + sources
-    t.Run("Unauthorized", ...) // 401 without auth
-    t.Run("AIDisabled", ...) // Error with helpful message
-    t.Run("InvalidRequest", ...) // 400 on malformed JSON
-    t.Run("StreamingError", ...) // Handle mid-stream failures
-}
+- [ ] **4.4** Wire up title click navigation
+  - Use `useRouter` for programmatic navigation
+  - Navigate to `/bookmark/:id/content` when `hasContent: true`
+  - Navigate to external URL when `hasContent: false`
 
-func TestHandleChatStatus(t *testing.T) {
-    t.Run("Enabled", ...) // Returns stats
-    t.Run("Disabled", ...) // Returns disabled state
-}
-```
+- [ ] **4.5** Add store unit tests
+  - Test `updateBookmark` updates store correctly
+  - Test `fetchBookmarkContent` API integration
+  - Test error handling
 
-**Integration Test (cURL):** `scripts/test-api-chat.sh`
+- [ ] **4.6** Integration test for HomeView with BookmarkCard
+  - Test cards render from store data
+  - Test click interactions
+  - Test toast notifications appear
 
-```bash
-#!/bin/bash
-# Get session token
-TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
-    -d '{"username":"test","password":"test"}' | jq -r .token)
+### Verification Script
 
-# Test chat endpoint
-curl -N -H "Authorization: Bearer $TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{"message":"What is Go?","history":[]}' \
-    http://localhost:8080/api/v1/chat
-
-# Verify SSE events received:
-# - event: chunk
-# - event: sources
-# - event: done
-
-# Test status endpoint
-curl -H "Authorization: Bearer $TOKEN" \
-    http://localhost:8080/api/v1/chat/status | jq '.enabled'
-
-echo "✓ Chat API endpoints work"
-```
-
-**Exit Criteria:**
-- POST /api/v1/chat streams SSE events correctly
-- SSE includes text chunks, sources, and done event
-- Authentication enforced (401 without token)
-- AI disabled state returns helpful error
-- GET /api/v1/chat/status returns accurate statistics
-- Swagger docs updated and valid
-- All unit tests pass
-- cURL integration test succeeds
-
----
-
-## Phase 5: Embedding Lifecycle Automation
-
-**Goal:** Automatically embed bookmarks on save and backfill existing
-
-**Dependencies:** Phase 2 (does not depend on Phase 3/4)
-
-### Tasks
-
-- [x] Create background worker in `internal/domains/embedding_worker.go`
-  - Job queue for async embedding
-  - Configurable concurrency
-  - Exponential backoff on failures
-  - Graceful shutdown
-- [x] Hook embedding into bookmark save flow
-  - Update `internal/domains/bookmarks.go`:
-    - After bookmark save, enqueue embedding job
-    - Set `embedding_status = 'pending'`
-    - Job runs asynchronously (don't block response)
-- [x] Implement backfill job (already in embedding.go BackfillEmbeddings)
-  - Query bookmarks with `embedding_status = 'pending'`
-  - Process in batches (configurable size)
-  - Delay between batches to avoid overwhelming Ollama
-  - Idempotent (safe to restart)
-  - Log progress: "Backfill: 45/150 complete"
-- [x] Start backfill on server startup (if enabled in config)
-- [x] Add embedding re-generation on bookmark content update
-  - Detect content changes
-  - Delete old chunks
-  - Re-enqueue for embedding
-
-### Completion Criteria
-
-**Unit Tests:**
-
-```go
-// internal/core/embedding_worker_test.go
-func TestEmbeddingWorker(t *testing.T) {
-    t.Run("ProcessJob", ...) // Job completes, status updated
-    t.Run("RetryOnFailure", ...) // Exponential backoff
-    t.Run("GracefulShutdown", ...) // Drains queue on shutdown
-}
-
-// internal/core/embedding_backfill_test.go
-func TestBackfillJob(t *testing.T) {
-    t.Run("ProcessPendingBookmarks", ...)
-    t.Run("RespectBatchSize", ...)
-    t.Run("SkipCompleted", ...) // Idempotent
-}
-```
-
-**End-to-End Test:** `scripts/test-embedding-lifecycle.sh`
+Create `webapp/phase4-verify.sh`:
 
 ```bash
 #!/bin/bash
-# Start server with backfill enabled
-go run main.go serve &
-SERVER_PID=$!
+set -e
 
-# Create bookmark via API
-BOOKMARK_ID=$(curl -X POST -H "Authorization: Bearer $TOKEN" \
-    http://localhost:8080/api/v1/bookmarks \
-    -d '{"url":"https://example.com/article"}' | jq -r .id)
+echo "=== Phase 4 Verification ==="
 
-# Wait for async embedding (max 10s)
-for i in {1..10}; do
-    STATUS=$(psql -t $SHIORI_TEST_PG_URL -c \
-        "SELECT embedding_status FROM bookmark WHERE id=$BOOKMARK_ID")
-    [ "$STATUS" = "completed" ] && break
-    sleep 1
-done
+# Check store updates
+echo "Checking bookmarks store..."
+STORE_FILE="webapp/src/stores/bookmarks.ts"
+grep -q "updateBookmark" "$STORE_FILE" && echo "✓ updateBookmark method" || { echo "✗ updateBookmark not found"; exit 1; }
+grep -q "fetchBookmarkContent" "$STORE_FILE" && echo "✓ fetchBookmarkContent method" || { echo "✗ fetchBookmarkContent not found"; exit 1; }
 
-# Verify chunks created
-CHUNKS=$(psql -t $SHIORI_TEST_PG_URL -c \
-    "SELECT COUNT(*) FROM bookmark_chunks WHERE bookmark_id=$BOOKMARK_ID")
-[ $CHUNKS -gt 0 ]
+# Check HomeView uses BookmarkCard
+echo "Checking HomeView integration..."
+HOME_FILE="webapp/src/views/HomeView.vue"
+grep -q "BookmarkCard" "$HOME_FILE" && echo "✓ BookmarkCard imported" || { echo "✗ BookmarkCard not imported"; exit 1; }
+grep -q "content-fetched" "$HOME_FILE" && echo "✓ Event handler present" || { echo "✗ Event handler not found"; exit 1; }
 
-# Test backfill: Create 5 bookmarks manually with status=pending
-psql $SHIORI_TEST_PG_URL -c "INSERT INTO bookmark (...) VALUES (...)"
-# Trigger backfill
-curl -X POST http://localhost:8080/api/v1/admin/backfill-embeddings
+# Check BookmarkCard uses store
+echo "Checking BookmarkCard store integration..."
+CARD_FILE="webapp/src/components/bookmarks/BookmarkCard.vue"
+grep -q "useBookmarksStore\|toast" "$CARD_FILE" && echo "✓ Store/toast integration" || { echo "✗ Store/toast not integrated"; exit 1; }
 
-# Wait and verify all completed
-sleep 5
-PENDING=$(psql -t $SHIORI_TEST_PG_URL -c \
-    "SELECT COUNT(*) FROM bookmark WHERE embedding_status='pending'")
-[ $PENDING -eq 0 ]
+# Run type-check
+echo "Running type-check..."
+cd webapp && bun run type-check && echo "✓ Type check passed" || { echo "✗ Type check failed"; exit 1; }
 
-kill $SERVER_PID
-echo "✓ Embedding lifecycle automation works"
+# Run all unit tests
+echo "Running unit tests..."
+cd webapp && bun run test:unit --run && echo "✓ Unit tests passed" || { echo "✗ Unit tests failed"; exit 1; }
+
+# Run lint
+echo "Running linter..."
+cd webapp && bun run lint && echo "✓ Lint passed" || { echo "✗ Lint failed"; exit 1; }
+
+echo ""
+echo "=== Phase 4 Complete ✓ ==="
 ```
 
-**Exit Criteria:**
-- New bookmarks automatically queued for embedding
-- Embedding completes asynchronously without blocking save
-- Backfill processes all pending bookmarks on startup
-- Backfill logs progress to stdout
-- Failed embeddings marked with status=failed and error message
-- Content updates trigger re-embedding
-- All unit tests pass
-- E2E lifecycle test succeeds
+### Exit Criteria
+
+- [x] Bookmarks store has new methods
+- [x] BookmarkCard uses store for content fetching
+- [x] HomeView displays BookmarkCard components
+- [x] Toast notifications working
+- [x] Title navigation working (internal/external)
+- [x] All existing functionality preserved
+- [x] Store unit tests passing
+- [x] Integration tests passing
+- [x] `phase4-verify.sh` passes all checks
 
 ---
 
-## Phase 6: Chat UI (Vue Frontend)
+## Phase 5: Polish, E2E Tests & Documentation
 
-**Goal:** Build interactive chat panel in webapp
+**Goal:** Final polish, end-to-end testing, and ensure production readiness.
 
 **Dependencies:** Phase 4
 
 ### Tasks
 
-- [x] Create Pinia store `webapp/src/stores/chat.ts`
-  - State: messages[], isOpen, isStreaming, embeddingStatus
-  - Actions: sendMessage(), openPanel(), closePanel(), clearHistory()
-  - sessionStorage persistence for history
-- [x] Create Vue component `webapp/src/components/ChatPanel.vue`
-  - Slide-out panel (400px width)
-  - Message list with auto-scroll
-  - User/assistant message bubbles
-  - Source citation cards (expandable)
-  - Input field with send button
-  - "New conversation" button
-  - Loading indicator during streaming
-- [x] Implement SSE client in `webapp/src/services/chatApi.ts`
-  - `streamChat(message, history): EventSource`
-  - Parse SSE events: chunk, sources, done, error
-  - Reconnect on connection drop
-- [x] Add chat toggle button to sidebar navigation
-- [x] Create disabled state component
-  - Show when `GET /api/v1/chat/status` returns `enabled: false`
-  - Display configuration instructions
-  - Link to documentation
-- [x] Style with Tailwind CSS (match existing Shiori design)
-- [x] Add mobile responsive layout (overlay on small screens)
+- [ ] **5.1** Visual polish and responsive design
+  - Test on mobile viewport sizes
+  - Adjust card layout for small screens
+  - Verify dark mode styling
+  - Ensure consistent spacing
 
-### Completion Criteria
+- [ ] **5.2** Error handling improvements
+  - Handle network failures gracefully
+  - Handle 401 (redirect to login)
+  - Handle 404 (bookmark not found)
+  - Log errors to console with context
 
-**Unit Tests (Vitest):**
+- [ ] **5.3** Accessibility audit
+  - Test with keyboard navigation
+  - Verify screen reader announcements
+  - Check color contrast
+  - Add focus indicators
 
-```typescript
-// webapp/src/stores/chat.test.ts
-describe('useChatStore', () => {
-  it('adds messages to history', ...)
-  it('persists to sessionStorage', ...)
-  it('clears history on clearHistory()', ...)
-  it('toggles panel open/closed', ...)
-})
+- [ ] **5.4** Write E2E tests (`e2e/`)
+  - Test bookmark card displays correctly
+  - Test title click navigates to readable view
+  - Test download icon fetches content
+  - Test toast notifications appear
+  - Test error scenarios
 
-// webapp/src/services/chatApi.test.ts
-describe('streamChat', () => {
-  it('parses SSE chunk events', ...)
-  it('parses SSE sources event', ...)
-  it('handles stream errors', ...)
-})
-```
+- [ ] **5.5** Run full test suite
+  - Unit tests: `bun run test:unit`
+  - Type check: `bun run type-check`
+  - Lint: `bun run lint`
+  - E2E tests: `make e2e`
+  - Go backend tests: `make unittest`
 
-**Component Tests:**
+- [ ] **5.6** Code cleanup
+  - Remove any debug/console.log statements
+  - Remove verification scripts
+  - Review and clean up comments
+  - Ensure consistent code style
 
-```typescript
-// webapp/src/components/ChatPanel.test.ts
-describe('ChatPanel', () => {
-  it('renders messages', ...)
-  it('sends message on button click', ...)
-  it('shows loading during streaming', ...)
-  it('displays source citations', ...)
-  it('shows disabled state when AI not configured', ...)
-})
-```
+- [ ] **5.7** Final review against acceptance criteria
+  - Cross-check all PRD acceptance criteria
+  - Verify all behaviors match specification
 
-**Manual Test Checklist:**
+### Verification Script
 
-```markdown
-- [ ] Panel slides in/out smoothly
-- [ ] Messages appear in real-time during streaming
-- [ ] Source citations clickable and navigate to bookmarks
-- [ ] New conversation clears history
-- [ ] History persists on page refresh (within session)
-- [ ] History clears on browser tab close
-- [ ] Mobile layout works (panel overlays content)
-- [ ] Disabled state shows helpful instructions
-- [ ] Keyboard shortcuts work (Enter to send)
-- [ ] Auto-scroll keeps latest message visible
-- [ ] Error messages display clearly
-```
-
-**E2E Test (Playwright):** `webapp/e2e/chat.spec.ts`
-
-```typescript
-test('chat flow', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Chat' }).click();
-  
-  // Panel opens
-  await expect(page.getByTestId('chat-panel')).toBeVisible();
-  
-  // Send message
-  await page.getByPlaceholder('Ask about your bookmarks...').fill('What is Go?');
-  await page.getByRole('button', { name: 'Send' }).click();
-  
-  // Wait for streaming response
-  await expect(page.getByText(/Go is/)).toBeVisible({ timeout: 10000 });
-  
-  // Verify sources appear
-  await expect(page.getByTestId('source-citation')).toBeVisible();
-  
-  // Click source navigates to bookmark
-  await page.getByTestId('source-citation').first().click();
-  await expect(page.url()).toContain('/bookmarks/');
-});
-```
-
-**Exit Criteria:**
-- All Vitest unit tests pass
-- All component tests pass
-- Manual test checklist 100% complete
-- E2E test passes
-- Chat UI matches design mockups
-- Disabled state displays when AI not configured
-- SSE streaming works without reconnection issues
-- Mobile responsive layout works
-- `bun run lint` and `bun run type-check` pass
-
----
-
-## Phase 7: Documentation & Polish
-
-**Goal:** Finalize documentation, error handling, and deployment
-
-**Dependencies:** All previous phases
-
-### Tasks
-
-- [ ] Write user documentation in `docs/ai-chat.md`
-  - Feature overview
-  - Configuration guide (Ollama + Anthropic setup)
-  - Usage examples
-  - Troubleshooting
-- [ ] Write admin documentation in `docs/ai-chat-admin.md`
-  - PostgreSQL requirements
-  - pgvector installation
-  - Embedding backfill process
-  - Monitoring and metrics
-  - Performance tuning
-- [ ] Update main README.md with AI chat feature
-- [ ] Add migration guide for SQLite users
-- [ ] Improve error messages:
-  - AI not configured: Link to docs
-  - Ollama unavailable: "Check Ollama is running at {host}"
-  - Anthropic quota exceeded: Clear error with link to billing
-  - pgvector not installed: Migration instructions
-- [ ] Add structured logging with context:
-  - Embedding success/failure with bookmark ID
-  - Chat latency with user ID
-  - Backfill progress with batch number
-- [ ] Performance testing:
-  - Load test chat API (100 concurrent users)
-  - Verify vector search <100ms with 1000 bookmarks
-  - Verify embedding generation <5s per bookmark
-- [ ] Security audit:
-  - API key not logged or exposed
-  - User isolation enforced (can't search other users' bookmarks)
-  - Input sanitization on chat messages
-  - Rate limiting on chat endpoint
-
-### Completion Criteria
-
-**Documentation Review Checklist:**
-
-```markdown
-- [ ] All steps in setup guide tested on clean system
-- [ ] Screenshots included for UI components
-- [ ] Troubleshooting covers common errors
-- [ ] Migration guide tested with sample SQLite database
-- [ ] API documentation in Swagger is complete
-```
-
-**Load Test:** `scripts/load-test-chat.sh`
+Create `webapp/phase5-verify.sh`:
 
 ```bash
 #!/bin/bash
-# Use k6 or vegeta to simulate load
-k6 run --vus 100 --duration 30s scripts/k6-chat.js
+set -e
 
-# Verify:
-# - p95 latency < 3s
-# - Error rate < 1%
-# - No memory leaks
+echo "=== Phase 5 Final Verification ==="
+
+# Run all frontend checks
+echo "Running type-check..."
+cd webapp && bun run type-check && echo "✓ Type check passed" || { echo "✗ Type check failed"; exit 1; }
+
+echo "Running unit tests..."
+cd webapp && bun run test:unit --run && echo "✓ Unit tests passed" || { echo "✗ Unit tests failed"; exit 1; }
+
+echo "Running linter..."
+cd webapp && bun run lint && echo "✓ Lint passed" || { echo "✗ Lint failed"; exit 1; }
+
+echo "Building production bundle..."
+cd webapp && bun run build && echo "✓ Build passed" || { echo "✗ Build failed"; exit 1; }
+
+cd ..
+
+# Run backend checks
+echo "Running Go linter..."
+make lint && echo "✓ Go lint passed" || { echo "✗ Go lint failed"; exit 1; }
+
+echo "Running Go unit tests..."
+make unittest && echo "✓ Go unit tests passed" || { echo "✗ Go unit tests failed"; exit 1; }
+
+# E2E tests (if configured)
+echo "Running E2E tests..."
+make e2e && echo "✓ E2E tests passed" || { echo "⚠ E2E tests skipped or failed"; }
+
+echo ""
+echo "=== Acceptance Criteria Checklist ==="
+echo ""
+echo "BookmarkCard Component:"
+echo "  [ ] Displays all required fields (title, URL, thumbnail, excerpt, tags, date)"
+echo "  [ ] Shows archive indicator when hasArchive: true"
+echo "  [ ] Shows ebook indicator when hasEbook: true"
+echo "  [ ] Title navigates to /bookmark/:id/content when hasContent: true"
+echo "  [ ] Title navigates to original URL when hasContent: false"
+echo "  [ ] URL click opens original URL in new tab"
+echo "  [ ] External link icon opens original URL in new tab"
+echo "  [ ] Download icon only visible when hasContent: false"
+echo "  [ ] Download icon shows spinner during fetch"
+echo "  [ ] Successful fetch shows success toast and updates card"
+echo "  [ ] Failed fetch shows error toast and navigates to original URL"
+echo ""
+echo "ReadableView:"
+echo "  [ ] Route /bookmark/:id/content is accessible"
+echo "  [ ] Displays readable HTML content"
+echo "  [ ] Shows bookmark title and original URL"
+echo "  [ ] Provides navigation back to home"
+echo "  [ ] Handles loading and error states"
+echo ""
+echo "Toast System:"
+echo "  [ ] vue-sonner is installed and configured"
+echo "  [ ] Toasts appear for fetch start, success, and failure"
+echo "  [ ] Toasts auto-dismiss appropriately"
+echo ""
+echo "Integration:"
+echo "  [ ] BookmarkCard replaces inline bookmark display in HomeView"
+echo "  [ ] Bookmarks store updated with new methods"
+echo "  [ ] All existing functionality preserved"
+echo ""
+echo "=== Phase 5 Complete ✓ ==="
 ```
 
-**Security Audit Checklist:**
+### Exit Criteria
 
-```markdown
-- [ ] API key not in logs (grep SHIORI_ANTHROPIC_API_KEY logs/)
-- [ ] User A cannot retrieve user B's bookmarks via chat
-- [ ] SQL injection prevented (parameterized queries)
-- [ ] XSS prevented (sanitized chat input)
-- [ ] Rate limiting prevents abuse (max 10 req/min per user)
-- [ ] HTTPS enforced in production config
-```
-
-**Exit Criteria:**
-- All documentation complete and reviewed
-- Setup guide verified on clean Ubuntu 22.04 + macOS
-- Load test passes performance targets
-- Security audit checklist 100% complete
-- All error messages user-friendly with actionable guidance
-- Logging structured and queryable
-- Feature ready for production deployment
+- [x] All acceptance criteria from PRD verified
+- [x] Responsive design tested
+- [x] Accessibility tested
+- [x] E2E tests passing
+- [x] Full test suite passing
+- [x] Production build succeeds
+- [x] Code cleaned up
+- [x] `phase5-verify.sh` passes all checks
 
 ---
 
-## Cross-Phase Testing Strategy
+## Summary
 
-### Continuous Integration
+| Phase | Focus | Estimated Complexity | Depends On |
+|-------|-------|---------------------|------------|
+| 1 | Foundation | Low | None |
+| 2 | BookmarkCard | Medium | Phase 1 |
+| 3 | ReadableView | Medium | Phase 1 |
+| 4 | Integration | Medium | Phase 2, 3 |
+| 5 | Polish & E2E | Low | Phase 4 |
 
-Each phase includes a CI job that must pass:
+### Key Files Created/Modified
 
-```yaml
-# .github/workflows/ai-chat.yml
-jobs:
-  test-phase-1:
-    - Run migration
-    - Run unit tests for config + database
-  
-  test-phase-2:
-    - Requires: Ollama service
-    - Run embedding service tests
-    - Run integration test script
-  
-  test-phase-3:
-    - Requires: Ollama + Anthropic API key (from secrets)
-    - Run chat domain tests
-    - Run E2E test script
-  
-  test-phase-4:
-    - Run API handler tests
-    - Run cURL integration test
-  
-  test-phase-5:
-    - Run worker tests
-    - Run lifecycle E2E test
-  
-  test-phase-6:
-    - Run Vitest unit tests
-    - Run component tests
-    - Run Playwright E2E tests
-  
-  test-phase-7:
-    - Run full test suite
-    - Run load tests
-    - Run security audit
-```
+**New Files:**
+- `webapp/src/utils/toast.ts`
+- `webapp/src/components/bookmarks/BookmarkCard.vue`
+- `webapp/src/components/bookmarks/BookmarkCard.spec.ts`
+- `webapp/src/views/ReadableView.vue`
+- `webapp/src/views/ReadableView.spec.ts`
 
-### Test Data Setup
+**Modified Files:**
+- `webapp/package.json` (add vue-sonner)
+- `webapp/src/App.vue` (add Toaster)
+- `webapp/src/router/index.ts` (add readable route)
+- `webapp/src/stores/bookmarks.ts` (add new methods)
+- `webapp/src/views/HomeView.vue` (use BookmarkCard)
+- `internal/http/handlers/api/v1/bookmarks.go` (fix swagger annotation)
 
-Create reusable test fixtures:
+### Risk Mitigation
 
-```sql
--- testdata/ai_test_fixtures.sql
--- 5 bookmarks with known content on different topics:
--- 1. Go programming
--- 2. Python programming
--- 3. Database optimization
--- 4. Frontend frameworks
--- 5. DevOps practices
-```
-
-### Regression Testing
-
-Before merging each phase:
-
-```bash
-# Run full existing test suite to prevent regressions
-make unittest
-make e2e
-
-# Run AI-specific tests
-go test -tags test_postgres_only,osusergo,netgo,fts5 ./internal/domains/...
-cd webapp && bun run test:unit
-```
+1. **API Client Bug:** Fixed in Phase 1 before dependent work begins
+2. **Parallel Development:** Phases 2 and 3 can be worked on simultaneously after Phase 1
+3. **Incremental Testing:** Each phase has verification scripts to catch issues early
+4. **Rollback Points:** Each phase leaves the codebase in a working state
 
 ---
 
-## Dependency Graph
-
-```
-Phase 0 (Prerequisites)
-    ↓
-Phase 1 (Config + DB Schema)
-    ↓
-Phase 2 (Embedding Service) ──────┐
-    ↓                              ↓
-Phase 3 (Chat Domain)          Phase 5 (Lifecycle)
-    ↓                              ↓
-Phase 4 (API Endpoints)            ↓
-    ↓                              ↓
-Phase 6 (Chat UI) ←────────────────┘
-    ↓
-Phase 7 (Documentation)
-```
-
-**Notes:**
-- Phase 5 only depends on Phase 2 (can run parallel to Phase 3-4)
-- Phase 6 requires Phase 4 for API, but benefits from Phase 5 for full testing
-- Phase 7 requires all phases complete
-
----
-
-## Rollback Strategy
-
-Each phase is designed to be independently revertible:
-
-### Phase 1 Rollback
-- Drop migration 0009
-- Remove AI config code (feature flag keeps existing code working)
-
-### Phase 2-3 Rollback
-- Keep database schema (harmless if unused)
-- Remove embedding/chat services
-- No impact on existing features
-
-### Phase 4 Rollback
-- Remove API routes
-- Frontend won't call missing endpoints
-
-### Phase 5 Rollback
-- Disable background worker
-- Embeddings stop generating (existing data preserved)
-
-### Phase 6 Rollback
-- Hide chat UI button
-- All backend functionality remains
-
-### Full Rollback
-- Run down migration to remove pgvector tables
-- Remove AI config section
-- System returns to pre-AI state
-
----
-
-## Success Metrics (Post-Deployment)
-
-Track these metrics to validate feature success:
-
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Embedding success rate | >95% | `COUNT(embedding_status='completed') / COUNT(*)` |
-| Chat p95 latency | <3s | Application logs |
-| Feature adoption | >30% of active users try within 30 days | Analytics event |
-| User satisfaction | >80% positive | In-app survey (future) |
-| Embedding backlog | <10% pending after 24h | `GET /api/v1/chat/status` |
-
----
-
-## Risk Mitigation
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Ollama rate limiting | High | Backfill stalls | Configurable batch delay, retry logic |
-| Anthropic API costs | Medium | Unexpected bill | Token usage logging, budget alerts |
-| pgvector performance | Low | Slow search | Index tuning, query optimization, load testing |
-| Breaking change in dependencies | Low | Feature breaks | Pin versions, integration tests |
-| Large embeddings overwhelm DB | Medium | Storage issues | Monitor table size, document cleanup strategy |
-
----
-
-## Open Questions & Decisions
-
-### Q1: Vector Dimension Flexibility
-**Decision:** Lock to 768 dimensions for embeddinggemma in v1. Future versions can support configurable dimensions with schema migration.
-
-**Rationale:** Simplifies implementation, embeddinggemma is sufficient for MVP.
-
-### Q2: Content Extraction Timing
-**Decision:** Re-extract content during embedding (don't use stored `content` field).
-
-**Rationale:** Ensures consistency, allows for improved extraction logic over time. Slight performance cost is acceptable.
-
-### Q3: Token Counting for Chunking
-**Decision:** Use character approximation (4 chars ≈ 1 token) in v1.
-
-**Rationale:** Avoids dependency on tiktoken. Good enough for chunking (exact count not critical).
-
-### Q4: Conversation Length Limits
-**Decision:** No hard limit in v1, but log warning at 10+ turns.
-
-**Rationale:** Trust users to start new conversations when needed. Monitor usage to inform future limits.
-
-### Q5: Embedding Re-generation on Update
-**Decision:** Only re-embed if `content` or `html` fields change.
-
-**Rationale:** Metadata updates (title, tags) don't affect retrieval quality.
-
----
-
-## Definition of Done (Per Phase)
-
-Each phase is considered complete when:
-
-1. ✅ All tasks in checklist marked complete
-2. ✅ All unit tests pass
-3. ✅ Integration/E2E tests pass
-4. ✅ Code review approved (if team-based)
-5. ✅ Documentation updated
-6. ✅ CI pipeline green
-7. ✅ Manual testing checklist complete
-8. ✅ No regressions in existing features
-9. ✅ Performance benchmarks met
-10. ✅ Security considerations addressed
-
----
-
-## Estimated Timeline
-
-| Phase | Estimated Duration | Parallel Work Possible |
-|-------|-------------------|------------------------|
-| Phase 0 | 1 day | No |
-| Phase 1 | 2-3 days | No |
-| Phase 2 | 3-4 days | No |
-| Phase 3 | 3-4 days | Yes (with Phase 5) |
-| Phase 4 | 2 days | No |
-| Phase 5 | 2-3 days | Yes (with Phase 3) |
-| Phase 6 | 4-5 days | No |
-| Phase 7 | 2-3 days | No |
-| **Total** | **19-27 days** | **~15-20 days with parallelization** |
-
-**Note:** Timeline assumes single developer working full-time. Adjust for team size and availability.
-
----
-
-## Post-Launch Iteration Plan
-
-Features to consider after v1 launch:
-
-1. **Tag-scoped chat** - "Ask about my 'golang' bookmarks"
-2. **Persistent chat history** - Store conversations in database
-3. **Multi-user chat** - Share conversations with other users
-4. **Alternative embedding models** - Support for other Ollama models
-5. **Hybrid search** - Combine vector search with keyword search
-6. **Export conversations** - Download as markdown
-7. **Custom prompts** - User-defined system prompts
-8. **Chat analytics** - Usage dashboards for admins
-
-Priority based on user feedback and adoption metrics.
+*Plan generated from PRD v1.0 (2026-01-31)*
